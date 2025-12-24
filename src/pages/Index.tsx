@@ -7,6 +7,7 @@ import { GenreSelector } from "@/components/GenreSelector";
 import { GenerateButton } from "@/components/GenerateButton";
 import { GlobalTelepathy } from "@/components/GlobalTelepathy";
 import { PlaybackControls } from "@/components/PlaybackControls";
+import { InstrumentPanel } from "@/components/InstrumentPanel";
 import { useAudioEngine } from "@/hooks/useAudioEngine";
 import { toast } from "sonner";
 
@@ -15,6 +16,10 @@ const Index = () => {
   const [rhythm, setRhythm] = useState(77);
   const [texture, setTexture] = useState(12);
   const [atmosphere, setAtmosphere] = useState(40);
+  const [piano, setPiano] = useState(50);
+  const [drums, setDrums] = useState(60);
+  const [bass, setBass] = useState(45);
+  const [synth, setSynth] = useState(55);
   const [lyrics, setLyrics] = useState("");
   const [selectedGenre, setSelectedGenre] = useState("groove");
   const [isPlaying, setIsPlaying] = useState(false);
@@ -27,6 +32,10 @@ const Index = () => {
     playTexture, 
     playAtmosphere, 
     playGenreSound,
+    playPiano,
+    playDrums,
+    playBass,
+    playSynth,
     startPlayback,
     stopPlayback 
   } = useAudioEngine();
@@ -44,11 +53,11 @@ const Index = () => {
   // Handle playback state
   useEffect(() => {
     if (isPlaying) {
-      startPlayback({ bpm: rhythm, harmony, texture, atmosphere });
+      startPlayback({ bpm: rhythm, harmony, texture, atmosphere, piano, drums, bass, synth });
     } else {
       stopPlayback();
     }
-  }, [isPlaying, rhythm, harmony, texture, atmosphere, startPlayback, stopPlayback]);
+  }, [isPlaying, rhythm, harmony, texture, atmosphere, piano, drums, bass, synth, startPlayback, stopPlayback]);
 
   const handleGenerate = () => {
     setIsGenerating(true);
@@ -128,7 +137,22 @@ const Index = () => {
         </section>
 
         {/* Right Panel - Controls */}
-        <aside className="w-80 p-4 space-y-4 overflow-y-auto border-l border-border/30">
+        <aside className="w-96 p-4 space-y-4 overflow-y-auto border-l border-border/30">
+          <InstrumentPanel
+            piano={piano}
+            drums={drums}
+            bass={bass}
+            synth={synth}
+            onPianoChange={setPiano}
+            onDrumsChange={setDrums}
+            onBassChange={setBass}
+            onSynthChange={setSynth}
+            onPianoInteract={playPiano}
+            onDrumsInteract={playDrums}
+            onBassInteract={playBass}
+            onSynthInteract={playSynth}
+          />
+
           <LyricsInput value={lyrics} onChange={setLyrics} />
           
           <GenerateButton
