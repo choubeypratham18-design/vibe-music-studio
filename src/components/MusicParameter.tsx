@@ -5,6 +5,7 @@ interface MusicParameterProps {
   sublabel: string;
   value: number;
   onChange: (value: number) => void;
+  onInteract?: (value: number) => void;
   min?: number;
   max?: number;
   unit?: string;
@@ -16,12 +17,18 @@ export const MusicParameter = ({
   sublabel,
   value,
   onChange,
+  onInteract,
   min = 0,
   max = 100,
   unit = "%",
   variant = "primary",
 }: MusicParameterProps) => {
   const displayValue = unit === "BPM" ? value : value;
+
+  const handleChange = (newValue: number) => {
+    onChange(newValue);
+    onInteract?.(newValue);
+  };
   
   return (
     <div className="glass-panel p-4 space-y-3">
@@ -40,7 +47,7 @@ export const MusicParameter = ({
       <div className="space-y-1">
         <Slider
           value={[value]}
-          onValueChange={(vals) => onChange(vals[0])}
+          onValueChange={(vals) => handleChange(vals[0])}
           min={min}
           max={max}
           step={1}

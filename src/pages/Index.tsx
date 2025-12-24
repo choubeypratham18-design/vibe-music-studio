@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Header } from "@/components/Header";
 import { MusicParameter } from "@/components/MusicParameter";
 import { ParticleVisualization } from "@/components/ParticleVisualization";
@@ -7,6 +7,7 @@ import { GenreSelector } from "@/components/GenreSelector";
 import { GenerateButton } from "@/components/GenerateButton";
 import { GlobalTelepathy } from "@/components/GlobalTelepathy";
 import { PlaybackControls } from "@/components/PlaybackControls";
+import { useAudioEngine } from "@/hooks/useAudioEngine";
 import { toast } from "sonner";
 
 const Index = () => {
@@ -20,6 +21,16 @@ const Index = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [currentTime, setCurrentTime] = useState("00:00:00");
 
+  const { 
+    playHarmony, 
+    playRhythm, 
+    playTexture, 
+    playAtmosphere, 
+    playGenreSound,
+    startPlayback,
+    stopPlayback 
+  } = useAudioEngine();
+
   useEffect(() => {
     const interval = setInterval(() => {
       const now = new Date();
@@ -29,6 +40,15 @@ const Index = () => {
     }, 1000);
     return () => clearInterval(interval);
   }, []);
+
+  // Handle playback state
+  useEffect(() => {
+    if (isPlaying) {
+      startPlayback({ bpm: rhythm, harmony, texture, atmosphere });
+    } else {
+      stopPlayback();
+    }
+  }, [isPlaying, rhythm, harmony, texture, atmosphere, startPlayback, stopPlayback]);
 
   const handleGenerate = () => {
     setIsGenerating(true);
@@ -63,6 +83,7 @@ const Index = () => {
             sublabel="Chord tension"
             value={harmony}
             onChange={setHarmony}
+            onInteract={playHarmony}
             variant="primary"
           />
           <MusicParameter
@@ -70,6 +91,7 @@ const Index = () => {
             sublabel="Tempo & syncopation"
             value={rhythm}
             onChange={setRhythm}
+            onInteract={playRhythm}
             min={60}
             max={180}
             unit=" BPM"
@@ -80,6 +102,7 @@ const Index = () => {
             sublabel="Acoustic ↔ Digital"
             value={texture}
             onChange={setTexture}
+            onInteract={playTexture}
             variant="primary"
           />
           <MusicParameter
@@ -87,6 +110,7 @@ const Index = () => {
             sublabel="Reverb & Delay mix"
             value={atmosphere}
             onChange={setAtmosphere}
+            onInteract={playAtmosphere}
             variant="primary"
           />
         </aside>
@@ -116,6 +140,7 @@ const Index = () => {
           <GenreSelector
             selectedGenre={selectedGenre}
             onSelect={setSelectedGenre}
+            onPlaySound={playGenreSound}
           />
 
           <GlobalTelepathy />
