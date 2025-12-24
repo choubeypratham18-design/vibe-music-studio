@@ -10,6 +10,7 @@ interface Genre {
 interface GenreSelectorProps {
   selectedGenre: string;
   onSelect: (genre: string) => void;
+  onPlaySound?: (genre: string) => void;
 }
 
 const genres: Genre[] = [
@@ -18,13 +19,18 @@ const genres: Genre[] = [
   { id: "future", name: "FUTURE", subtitle: "Cyber", icon: "⚡" },
 ];
 
-export const GenreSelector = ({ selectedGenre, onSelect }: GenreSelectorProps) => {
+export const GenreSelector = ({ selectedGenre, onSelect, onPlaySound }: GenreSelectorProps) => {
+  const handleSelect = (genreId: string) => {
+    onSelect(genreId);
+    onPlaySound?.(genreId);
+  };
+
   return (
     <div className="flex gap-2">
       {genres.map((genre) => (
         <button
           key={genre.id}
-          onClick={() => onSelect(genre.id)}
+          onClick={() => handleSelect(genre.id)}
           className={cn(
             "flex-1 flex flex-col items-center gap-1 py-3 px-2 rounded-lg border transition-all duration-300",
             selectedGenre === genre.id
