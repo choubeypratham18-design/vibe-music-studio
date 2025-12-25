@@ -92,12 +92,10 @@ export const UniverseBackground = ({ isPlaying, intensity }: UniverseBackgroundP
         ctx.translate(nebula.x, nebula.y);
         ctx.rotate(nebula.rotation);
 
-        const nebulaGradient = ctx.createRadialGradient(0, 0, 0, 0, 0, nebula.radius);
         const alpha = 0.03 + intensityFactor * 0.07;
-        nebulaGradient.addColorStop(0, nebula.color.replace(")", `, ${alpha * 2})`).replace("rgb", "rgba").replace("#", ""));
         
-        // Parse hex color
-        const hex = nebula.color;
+        // Parse hex color (ensure it has # prefix)
+        const hex = nebula.color.startsWith('#') ? nebula.color : `#${nebula.color}`;
         const r = parseInt(hex.slice(1, 3), 16);
         const g = parseInt(hex.slice(3, 5), 16);
         const b = parseInt(hex.slice(5, 7), 16);
@@ -143,8 +141,8 @@ export const UniverseBackground = ({ isPlaying, intensity }: UniverseBackgroundP
         const currentBrightness = star.brightness * (0.5 + twinkle * 0.5);
         const size = star.size * (1 + intensityFactor * 0.5);
 
-        // Parse star color
-        const hex = star.color;
+        // Parse star color (ensure it has # prefix)
+        const hex = star.color.startsWith('#') ? star.color : `#${star.color}`;
         const r = parseInt(hex.slice(1, 3), 16);
         const g = parseInt(hex.slice(3, 5), 16);
         const b = parseInt(hex.slice(5, 7), 16);
@@ -157,7 +155,7 @@ export const UniverseBackground = ({ isPlaying, intensity }: UniverseBackgroundP
         );
         glowGradient.addColorStop(0, `rgba(${r}, ${g}, ${b}, ${currentBrightness})`);
         glowGradient.addColorStop(0.5, `rgba(${r}, ${g}, ${b}, ${currentBrightness * 0.3})`);
-        glowGradient.addColorStop(1, "transparent");
+        glowGradient.addColorStop(1, "rgba(0, 0, 0, 0)");
 
         ctx.fillStyle = glowGradient;
         ctx.beginPath();
@@ -165,7 +163,7 @@ export const UniverseBackground = ({ isPlaying, intensity }: UniverseBackgroundP
         ctx.fill();
 
         // Core
-        ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${currentBrightness + 0.3})`;
+        ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${Math.min(1, currentBrightness + 0.3)})`;
         ctx.beginPath();
         ctx.arc(star.x, star.y, size, 0, Math.PI * 2);
         ctx.fill();
