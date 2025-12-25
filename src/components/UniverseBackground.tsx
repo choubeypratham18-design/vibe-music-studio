@@ -19,15 +19,46 @@ interface Nebula {
   rotationSpeed: number;
 }
 
+interface Planet {
+  x: number;
+  y: number;
+  radius: number;
+  color: string;
+  ringColor?: string;
+  hasRing: boolean;
+  orbitSpeed: number;
+  orbitAngle: number;
+}
+
+interface Comet {
+  x: number;
+  y: number;
+  speed: number;
+  angle: number;
+  tailLength: number;
+  active: boolean;
+}
+
+interface Asteroid {
+  x: number;
+  y: number;
+  size: number;
+  speed: number;
+  angle: number;
+}
+
 interface UniverseBackgroundProps {
   isPlaying: boolean;
-  intensity: number; // 0-100, based on music parameters
+  intensity: number;
 }
 
 export const UniverseBackground = ({ isPlaying, intensity }: UniverseBackgroundProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const starsRef = useRef<Star[]>([]);
   const nebulasRef = useRef<Nebula[]>([]);
+  const planetsRef = useRef<Planet[]>([]);
+  const cometsRef = useRef<Comet[]>([]);
+  const asteroidsRef = useRef<Asteroid[]>([]);
   const animationRef = useRef<number>();
 
   useEffect(() => {
@@ -67,6 +98,32 @@ export const UniverseBackground = ({ isPlaying, intensity }: UniverseBackgroundP
       { x: canvas.width * 0.5, y: canvas.height * 0.5, radius: 400, color: "#ffd700", rotation: Math.PI / 2, rotationSpeed: 0.0001 },
     ];
 
+    // Initialize planets
+    planetsRef.current = [
+      { x: canvas.width * 0.15, y: canvas.height * 0.6, radius: 30, color: "#ff6b6b", hasRing: false, orbitSpeed: 0.001, orbitAngle: 0 },
+      { x: canvas.width * 0.75, y: canvas.height * 0.25, radius: 45, color: "#4ecdc4", ringColor: "#ffd93d", hasRing: true, orbitSpeed: 0.0008, orbitAngle: Math.PI },
+      { x: canvas.width * 0.9, y: canvas.height * 0.8, radius: 25, color: "#a855f7", hasRing: false, orbitSpeed: 0.0012, orbitAngle: Math.PI / 2 },
+    ];
+
+    // Initialize comets
+    cometsRef.current = Array.from({ length: 5 }, () => ({
+      x: -100,
+      y: Math.random() * canvas.height,
+      speed: 3 + Math.random() * 5,
+      angle: Math.PI / 6 + Math.random() * (Math.PI / 6),
+      tailLength: 80 + Math.random() * 120,
+      active: false,
+    }));
+
+    // Initialize asteroid belt
+    asteroidsRef.current = Array.from({ length: 100 }, () => ({
+      x: canvas.width / 2 + (Math.random() - 0.5) * canvas.width * 0.8,
+      y: canvas.height / 2 + (Math.random() - 0.5) * 100,
+      size: 1 + Math.random() * 3,
+      speed: 0.2 + Math.random() * 0.5,
+      angle: Math.random() * Math.PI * 2,
+    }));
+
     const animate = () => {
       const width = canvas.width;
       const height = canvas.height;
@@ -93,8 +150,6 @@ export const UniverseBackground = ({ isPlaying, intensity }: UniverseBackgroundP
         ctx.rotate(nebula.rotation);
 
         const alpha = 0.03 + intensityFactor * 0.07;
-        
-        // Parse hex color (ensure it has # prefix)
         const hex = nebula.color.startsWith('#') ? nebula.color : `#${nebula.color}`;
         const r = parseInt(hex.slice(1, 3), 16);
         const g = parseInt(hex.slice(3, 5), 16);
@@ -104,7 +159,7 @@ export const UniverseBackground = ({ isPlaying, intensity }: UniverseBackgroundP
         nebulaGrad.addColorStop(0, `rgba(${r}, ${g}, ${b}, ${alpha * 2})`);
         nebulaGrad.addColorStop(0.3, `rgba(${r}, ${g}, ${b}, ${alpha})`);
         nebulaGrad.addColorStop(0.7, `rgba(${r}, ${g}, ${b}, ${alpha * 0.3})`);
-        nebulaGrad.addColorStop(1, "transparent");
+        nebulaGrad.addColorStop(1, "rgba(0, 0, 0, 0)");
 
         ctx.fillStyle = nebulaGrad;
         ctx.beginPath();
@@ -113,6 +168,128 @@ export const UniverseBackground = ({ isPlaying, intensity }: UniverseBackgroundP
 
         ctx.restore();
       });
+
+      // Draw planets (appear more during intense moments)
+      if (intensityFactor > 0.3) {
+        planetsRef.current.forEach((planet) => {
+          planet.orbitAngle += planet.orbitSpeed * (isPlaying ? 2 : 1);
+          const planetAlpha = Math.min(1, (intensityFactor - 0.3) * 2);
+          
+          ctx.save();
+          ctx.globalAlpha = planetAlpha;
+          
+          // Planet glow
+          const glowGrad = ctx.createRadialGradient(
+            planet.x, planet.y, 0,
+            planet.x, planet.y, planet.radius * 2
+          );
+          const hex = planet.color.startsWith('#') ? planet.color : `#${planet.color}`;
+          const r = parseInt(hex.slice(1, 3), 16);
+          const g = parseInt(hex.slice(3, 5), 16);
+          const b = parseInt(hex.slice(5, 7), 16);
+          
+          glowGrad.addColorStop(0, `rgba(${r}, ${g}, ${b}, 0.3)`);
+          glowGrad.addColorStop(1, "rgba(0, 0, 0, 0)");
+          ctx.fillStyle = glowGrad;
+          ctx.beginPath();
+          ctx.arc(planet.x, planet.y, planet.radius * 2, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Planet body
+          const planetGrad = ctx.createRadialGradient(
+            planet.x - planet.radius * 0.3, planet.y - planet.radius * 0.3, 0,
+            planet.x, planet.y, planet.radius
+          );
+          planetGrad.addColorStop(0, `rgba(${Math.min(255, r + 50)}, ${Math.min(255, g + 50)}, ${Math.min(255, b + 50)}, 1)`);
+          planetGrad.addColorStop(1, planet.color);
+          ctx.fillStyle = planetGrad;
+          ctx.beginPath();
+          ctx.arc(planet.x, planet.y, planet.radius, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Ring (if has ring)
+          if (planet.hasRing && planet.ringColor) {
+            ctx.strokeStyle = planet.ringColor;
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.ellipse(planet.x, planet.y, planet.radius * 1.8, planet.radius * 0.4, Math.PI / 6, 0, Math.PI * 2);
+            ctx.stroke();
+          }
+
+          ctx.restore();
+        });
+      }
+
+      // Draw asteroid belt during intense moments
+      if (isPlaying && intensityFactor > 0.5) {
+        const beltAlpha = (intensityFactor - 0.5) * 2;
+        asteroidsRef.current.forEach((asteroid) => {
+          asteroid.angle += asteroid.speed * 0.01;
+          const centerX = width / 2;
+          const centerY = height / 2;
+          const orbitRadius = 200 + Math.sin(asteroid.angle * 3) * 50;
+          
+          asteroid.x = centerX + Math.cos(asteroid.angle) * orbitRadius;
+          asteroid.y = centerY + Math.sin(asteroid.angle) * orbitRadius * 0.3;
+
+          ctx.fillStyle = `rgba(180, 180, 180, ${beltAlpha * 0.6})`;
+          ctx.beginPath();
+          ctx.arc(asteroid.x, asteroid.y, asteroid.size, 0, Math.PI * 2);
+          ctx.fill();
+        });
+      }
+
+      // Draw comets during very intense moments
+      if (isPlaying && intensityFactor > 0.6) {
+        cometsRef.current.forEach((comet, i) => {
+          // Activate comets randomly
+          if (!comet.active && Math.random() < 0.005 * intensityFactor) {
+            comet.active = true;
+            comet.x = -50;
+            comet.y = Math.random() * height * 0.5;
+          }
+
+          if (comet.active) {
+            comet.x += Math.cos(comet.angle) * comet.speed * intensityFactor;
+            comet.y += Math.sin(comet.angle) * comet.speed * intensityFactor;
+
+            // Draw comet tail
+            const tailGrad = ctx.createLinearGradient(
+              comet.x, comet.y,
+              comet.x - Math.cos(comet.angle) * comet.tailLength,
+              comet.y - Math.sin(comet.angle) * comet.tailLength
+            );
+            tailGrad.addColorStop(0, "rgba(255, 255, 255, 0.9)");
+            tailGrad.addColorStop(0.3, "rgba(0, 212, 255, 0.5)");
+            tailGrad.addColorStop(1, "rgba(0, 0, 0, 0)");
+
+            ctx.strokeStyle = tailGrad;
+            ctx.lineWidth = 2 + i * 0.5;
+            ctx.beginPath();
+            ctx.moveTo(comet.x, comet.y);
+            ctx.lineTo(
+              comet.x - Math.cos(comet.angle) * comet.tailLength,
+              comet.y - Math.sin(comet.angle) * comet.tailLength
+            );
+            ctx.stroke();
+
+            // Comet head
+            const headGrad = ctx.createRadialGradient(comet.x, comet.y, 0, comet.x, comet.y, 8);
+            headGrad.addColorStop(0, "rgba(255, 255, 255, 1)");
+            headGrad.addColorStop(0.5, "rgba(0, 212, 255, 0.8)");
+            headGrad.addColorStop(1, "rgba(0, 0, 0, 0)");
+            ctx.fillStyle = headGrad;
+            ctx.beginPath();
+            ctx.arc(comet.x, comet.y, 8, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Reset if off screen
+            if (comet.x > width + 100 || comet.y > height + 100) {
+              comet.active = false;
+            }
+          }
+        });
+      }
 
       // Draw shooting stars when playing
       if (isPlaying && Math.random() < 0.02 * intensityFactor) {
@@ -125,7 +302,7 @@ export const UniverseBackground = ({ isPlaying, intensity }: UniverseBackgroundP
           shootingX + length, shootingY + length * 0.3
         );
         shootGradient.addColorStop(0, "rgba(255, 255, 255, 0.8)");
-        shootGradient.addColorStop(1, "transparent");
+        shootGradient.addColorStop(1, "rgba(0, 0, 0, 0)");
         
         ctx.strokeStyle = shootGradient;
         ctx.lineWidth = 2;
@@ -141,7 +318,6 @@ export const UniverseBackground = ({ isPlaying, intensity }: UniverseBackgroundP
         const currentBrightness = star.brightness * (0.5 + twinkle * 0.5);
         const size = star.size * (1 + intensityFactor * 0.5);
 
-        // Parse star color (ensure it has # prefix)
         const hex = star.color.startsWith('#') ? star.color : `#${star.color}`;
         const r = parseInt(hex.slice(1, 3), 16);
         const g = parseInt(hex.slice(3, 5), 16);

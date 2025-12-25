@@ -11,12 +11,13 @@ import { InstrumentPanel } from "@/components/InstrumentPanel";
 import { UniverseBackground } from "@/components/UniverseBackground";
 import { VolumeControls } from "@/components/VolumeControls";
 import { RecordingControls } from "@/components/RecordingControls";
+import { Equalizer } from "@/components/Equalizer";
 import { useAudioEngine } from "@/hooks/useAudioEngine";
 import { toast } from "sonner";
 
 const Index = () => {
   const [harmony, setHarmony] = useState(20);
-  const [rhythm, setRhythm] = useState(77);
+  const [rhythm, setRhythm] = useState(110);
   const [texture, setTexture] = useState(12);
   const [atmosphere, setAtmosphere] = useState(40);
   const [piano, setPiano] = useState(50);
@@ -28,6 +29,7 @@ const Index = () => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [currentTime, setCurrentTime] = useState("00:00:00");
+  const [recordingTime, setRecordingTime] = useState(0);
 
   const { 
     playHarmony, 
@@ -47,6 +49,7 @@ const Index = () => {
     exportRecording,
     volumes,
     updateVolume,
+    generateFromLyrics,
   } = useAudioEngine();
 
   // Calculate overall intensity for universe background
@@ -62,36 +65,79 @@ const Index = () => {
     return () => clearInterval(interval);
   }, []);
 
+  // Recording time tracker
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (isRecording) {
+      setRecordingTime(0);
+      interval = setInterval(() => {
+        setRecordingTime(prev => prev + 1);
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [isRecording]);
+
   useEffect(() => {
     if (isPlaying) {
-      startPlayback({ bpm: rhythm, harmony, texture, atmosphere, piano, drums, bass, synth });
+      startPlayback({ bpm: rhythm, harmony, texture, atmosphere, piano, drums, bass, synth, lyrics, genre: selectedGenre });
     } else {
       stopPlayback();
     }
-  }, [isPlaying, rhythm, harmony, texture, atmosphere, piano, drums, bass, synth, startPlayback, stopPlayback]);
+  }, [isPlaying, rhythm, harmony, texture, atmosphere, piano, drums, bass, synth, startPlayback, stopPlayback, lyrics, selectedGenre]);
 
   const handleGenerate = () => {
+    if (!lyrics.trim()) {
+      toast.warning("Please enter lyrics first", {
+        description: "Write some lyrics in Soul Patch to generate music",
+      });
+      return;
+    }
+
     setIsGenerating(true);
     toast.info("Reality Engine initializing...", {
-      description: "Generating your unique vibe composition",
+      description: "Analyzing lyrics and generating your unique vibe composition",
     });
     
+    // Generate parameters from lyrics
+    const generatedParams = generateFromLyrics(lyrics, selectedGenre);
+    
     setTimeout(() => {
+      // Apply generated parameters
+      setHarmony(generatedParams.harmony);
+      setAtmosphere(generatedParams.atmosphere);
+      setPiano(generatedParams.piano);
+      setSynth(generatedParams.synth);
+      setDrums(generatedParams.drums);
+      setBass(generatedParams.bass);
+      setTexture(generatedParams.texture);
+      
       setIsGenerating(false);
       setIsPlaying(true);
-      toast.success("Vibe Generated!", {
-        description: `${selectedGenre.toUpperCase()} track ready at ${rhythm} BPM`,
+      toast.success("Vibe Generated from Lyrics!", {
+        description: `${selectedGenre.toUpperCase()} track ready at ${rhythm} BPM - Mood: ${generatedParams.harmony > 50 ? 'Happy' : 'Melancholic'}`,
       });
     }, 3000);
   };
 
   const handleVocalizeOnly = () => {
+    if (!lyrics.trim()) {
+      toast.warning("Please enter lyrics first", {
+        description: "Write some lyrics to vocalize",
+      });
+      return;
+    }
     toast.info("Vocalization Mode", {
       description: "Generating vocals for your lyrics...",
     });
   };
 
   const handleStartRecording = () => {
+    if (!isPlaying) {
+      toast.warning("Start playing music first", {
+        description: "Play music before recording",
+      });
+      return;
+    }
     startRecording();
     toast.info("Recording Started", {
       description: "Your music is being captured...",
@@ -101,14 +147,27 @@ const Index = () => {
   const handleStopRecording = async () => {
     await stopRecording();
     toast.success("Recording Stopped", {
-      description: "Your recording is ready to export",
+      description: `Recorded ${recordingTime} seconds - Ready to export`,
     });
   };
 
   const handleExport = async () => {
-    await exportRecording();
-    toast.success("Track Exported!", {
-      description: "Your music has been downloaded",
+    const blob = await exportRecording();
+    if (blob) {
+      toast.success("Track Exported!", {
+        description: "Your music has been downloaded to your system",
+      });
+    } else {
+      toast.warning("No recording to export", {
+        description: "Record some music first before exporting",
+      });
+    }
+  };
+
+  const handleBpmChange = (bpm: number) => {
+    setRhythm(bpm);
+    toast.info(`Speed Changed: ${bpm} BPM`, {
+      description: bpm <= 80 ? "Slow tempo" : bpm <= 120 ? "Medium tempo" : "Fast tempo",
     });
   };
 
@@ -168,7 +227,7 @@ const Index = () => {
           </aside>
 
           {/* Center - Visualization */}
-          <section className="flex-1 p-4 relative">
+          <section className="flex-1 p-4 relative flex flex-col gap-4">
             <ParticleVisualization
               isPlaying={isPlaying}
               bpm={rhythm}
@@ -176,6 +235,17 @@ const Index = () => {
               rhythm={rhythm}
               texture={texture}
               atmosphere={atmosphere}
+            />
+            
+            {/* Equalizer Display */}
+            <Equalizer
+              isPlaying={isPlaying}
+              piano={piano}
+              drums={drums}
+              bass={bass}
+              synth={synth}
+              harmony={harmony}
+              rhythm={rhythm}
             />
           </section>
 
@@ -217,6 +287,7 @@ const Index = () => {
               selectedGenre={selectedGenre}
               onSelect={setSelectedGenre}
               onPlaySound={playGenreSound}
+              onBpmChange={handleBpmChange}
             />
 
             <GlobalTelepathy />

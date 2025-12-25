@@ -9,6 +9,8 @@ interface AudioEngineOptions {
   drums: number;
   bass: number;
   synth: number;
+  lyrics?: string;
+  genre?: string;
 }
 
 interface InstrumentVolumes {
@@ -128,33 +130,82 @@ export const useAudioEngine = () => {
     }
   }, [initAudioContext]);
 
-  // Stop recording and export
-  const stopRecording = useCallback((): Promise<Blob> => {
+  // Stop recording
+  const stopRecording = useCallback((): Promise<Blob | null> => {
     return new Promise((resolve) => {
-      if (mediaRecorderRef.current && isRecording) {
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
         mediaRecorderRef.current.onstop = () => {
           const blob = new Blob(recordedChunksRef.current, { type: 'audio/webm' });
           setIsRecording(false);
+          recordedBlobRef.current = blob;
           resolve(blob);
         };
         mediaRecorderRef.current.stop();
+      } else {
+        setIsRecording(false);
+        resolve(null);
       }
     });
-  }, [isRecording]);
+  }, []);
+
+  // Recorded blob reference
+  const recordedBlobRef = useRef<Blob | null>(null);
 
   // Export recording as downloadable file
   const exportRecording = useCallback(async () => {
-    const blob = await stopRecording();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `vibeverse-track-${Date.now()}.webm`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    return blob;
-  }, [stopRecording]);
+    let blob = recordedBlobRef.current;
+    
+    // If still recording, stop first
+    if (isRecording && mediaRecorderRef.current) {
+      blob = await stopRecording();
+    }
+    
+    if (blob && blob.size > 0) {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `vibeverse-track-${Date.now()}.webm`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      recordedBlobRef.current = null;
+      return blob;
+    }
+    return null;
+  }, [isRecording, stopRecording]);
+
+  // Generate music based on lyrics
+  const generateFromLyrics = useCallback((lyrics: string, genre: string) => {
+    // Analyze lyrics for mood/intensity
+    const words = lyrics.toLowerCase().split(/\s+/);
+    const happyWords = ['happy', 'joy', 'love', 'bright', 'sun', 'dance', 'smile', 'light'];
+    const sadWords = ['sad', 'cry', 'dark', 'rain', 'tears', 'lonely', 'pain', 'night'];
+    const energyWords = ['fire', 'fast', 'run', 'jump', 'power', 'strong', 'wild', 'free'];
+    
+    let mood = 50;
+    let energy = 50;
+    
+    words.forEach(word => {
+      if (happyWords.some(w => word.includes(w))) mood += 5;
+      if (sadWords.some(w => word.includes(w))) mood -= 5;
+      if (energyWords.some(w => word.includes(w))) energy += 5;
+    });
+    
+    mood = Math.max(0, Math.min(100, mood));
+    energy = Math.max(0, Math.min(100, energy));
+    
+    // Return suggested parameters based on lyrics analysis
+    return {
+      harmony: mood,
+      atmosphere: 100 - mood,
+      piano: mood > 50 ? 70 : 40,
+      synth: energy > 50 ? 80 : 30,
+      drums: energy,
+      bass: 50 + (energy - 50) * 0.5,
+      texture: Math.abs(mood - 50),
+    };
+  }, []);
 
   // Play a single note with specific instrument type
   const playNote = useCallback((frequency: number, duration: number, type: OscillatorType = "sine", volume: number = 0.2, targetGain?: GainNode) => {
@@ -624,5 +675,7 @@ export const useAudioEngine = () => {
     // Volumes
     volumes,
     updateVolume,
+    // Lyrics
+    generateFromLyrics,
   };
 };
