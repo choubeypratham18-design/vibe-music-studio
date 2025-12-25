@@ -1,4 +1,4 @@
-import { useRef, useCallback, useEffect } from "react";
+import { useRef, useCallback, useEffect, useState } from "react";
 
 interface AudioEngineOptions {
   bpm: number;
@@ -11,6 +11,14 @@ interface AudioEngineOptions {
   synth: number;
 }
 
+interface InstrumentVolumes {
+  piano: number;
+  drums: number;
+  bass: number;
+  synth: number;
+  master: number;
+}
+
 export const useAudioEngine = () => {
   const audioContextRef = useRef<AudioContext | null>(null);
   const masterGainRef = useRef<GainNode | null>(null);
@@ -19,13 +27,60 @@ export const useAudioEngine = () => {
   const oscillatorsRef = useRef<OscillatorNode[]>([]);
   const isPlayingRef = useRef(false);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Recording
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordedChunksRef = useRef<Blob[]>([]);
+  const destinationRef = useRef<MediaStreamAudioDestinationNode | null>(null);
+  const [isRecording, setIsRecording] = useState(false);
+  
+  // Instrument volumes
+  const [volumes, setVolumes] = useState<InstrumentVolumes>({
+    piano: 80,
+    drums: 80,
+    bass: 80,
+    synth: 80,
+    master: 70,
+  });
+
+  const instrumentGainsRef = useRef<{
+    piano: GainNode | null;
+    drums: GainNode | null;
+    bass: GainNode | null;
+    synth: GainNode | null;
+  }>({
+    piano: null,
+    drums: null,
+    bass: null,
+    synth: null,
+  });
 
   const initAudioContext = useCallback(() => {
     if (!audioContextRef.current) {
       audioContextRef.current = new AudioContext();
       masterGainRef.current = audioContextRef.current.createGain();
-      masterGainRef.current.gain.value = 0.3;
+      masterGainRef.current.gain.value = volumes.master / 100;
       masterGainRef.current.connect(audioContextRef.current.destination);
+
+      // Create recording destination
+      destinationRef.current = audioContextRef.current.createMediaStreamDestination();
+      masterGainRef.current.connect(destinationRef.current);
+
+      // Create instrument-specific gain nodes
+      instrumentGainsRef.current.piano = audioContextRef.current.createGain();
+      instrumentGainsRef.current.drums = audioContextRef.current.createGain();
+      instrumentGainsRef.current.bass = audioContextRef.current.createGain();
+      instrumentGainsRef.current.synth = audioContextRef.current.createGain();
+
+      instrumentGainsRef.current.piano.gain.value = volumes.piano / 100;
+      instrumentGainsRef.current.drums.gain.value = volumes.drums / 100;
+      instrumentGainsRef.current.bass.gain.value = volumes.bass / 100;
+      instrumentGainsRef.current.synth.gain.value = volumes.synth / 100;
+
+      instrumentGainsRef.current.piano.connect(masterGainRef.current);
+      instrumentGainsRef.current.drums.connect(masterGainRef.current);
+      instrumentGainsRef.current.bass.connect(masterGainRef.current);
+      instrumentGainsRef.current.synth.connect(masterGainRef.current);
 
       // Create delay effect
       delayRef.current = audioContextRef.current.createDelay(1.0);
@@ -39,8 +94,70 @@ export const useAudioEngine = () => {
     return audioContextRef.current;
   }, []);
 
+  // Update volume function
+  const updateVolume = useCallback((instrument: keyof InstrumentVolumes, value: number) => {
+    setVolumes(prev => ({ ...prev, [instrument]: value }));
+    
+    if (instrument === 'master' && masterGainRef.current) {
+      masterGainRef.current.gain.setValueAtTime(value / 100, audioContextRef.current?.currentTime || 0);
+    } else if (instrumentGainsRef.current[instrument as keyof typeof instrumentGainsRef.current]) {
+      const gainNode = instrumentGainsRef.current[instrument as keyof typeof instrumentGainsRef.current];
+      if (gainNode) {
+        gainNode.gain.setValueAtTime(value / 100, audioContextRef.current?.currentTime || 0);
+      }
+    }
+  }, []);
+
+  // Start recording
+  const startRecording = useCallback(() => {
+    const ctx = initAudioContext();
+    if (ctx.state === "suspended") ctx.resume();
+
+    if (destinationRef.current) {
+      recordedChunksRef.current = [];
+      mediaRecorderRef.current = new MediaRecorder(destinationRef.current.stream);
+      
+      mediaRecorderRef.current.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          recordedChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorderRef.current.start();
+      setIsRecording(true);
+    }
+  }, [initAudioContext]);
+
+  // Stop recording and export
+  const stopRecording = useCallback((): Promise<Blob> => {
+    return new Promise((resolve) => {
+      if (mediaRecorderRef.current && isRecording) {
+        mediaRecorderRef.current.onstop = () => {
+          const blob = new Blob(recordedChunksRef.current, { type: 'audio/webm' });
+          setIsRecording(false);
+          resolve(blob);
+        };
+        mediaRecorderRef.current.stop();
+      }
+    });
+  }, [isRecording]);
+
+  // Export recording as downloadable file
+  const exportRecording = useCallback(async () => {
+    const blob = await stopRecording();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `vibeverse-track-${Date.now()}.webm`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    return blob;
+  }, [stopRecording]);
+
   // Play a single note with specific instrument type
-  const playNote = useCallback((frequency: number, duration: number, type: OscillatorType = "sine", volume: number = 0.2) => {
+  const playNote = useCallback((frequency: number, duration: number, type: OscillatorType = "sine", volume: number = 0.2, targetGain?: GainNode) => {
     const ctx = initAudioContext();
     if (ctx.state === "suspended") ctx.resume();
 
@@ -54,7 +171,7 @@ export const useAudioEngine = () => {
     gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
     
     osc.connect(gainNode);
-    gainNode.connect(masterGainRef.current!);
+    gainNode.connect(targetGain || masterGainRef.current!);
     
     if (delayRef.current) {
       gainNode.connect(delayRef.current);
@@ -71,14 +188,13 @@ export const useAudioEngine = () => {
     const ctx = initAudioContext();
     if (ctx.state === "suspended") ctx.resume();
 
-    // Piano notes based on value (C major scale across octaves)
+    const pianoGain = instrumentGainsRef.current.piano || masterGainRef.current!;
     const notes = [261.63, 293.66, 329.63, 349.23, 392.00, 440.00, 493.88, 523.25];
     const noteIndex = Math.floor((value / 100) * (notes.length - 1));
     const baseFreq = notes[noteIndex];
 
-    // Piano has multiple harmonics with quick attack and longer decay
     const harmonics = [1, 2, 3, 4, 5];
-    const volumes = [0.3, 0.15, 0.08, 0.04, 0.02];
+    const volumesArr = [0.3, 0.15, 0.08, 0.04, 0.02];
 
     harmonics.forEach((harmonic, i) => {
       const osc = ctx.createOscillator();
@@ -91,15 +207,14 @@ export const useAudioEngine = () => {
       filter.type = "lowpass";
       filter.frequency.value = 4000;
 
-      // Piano-like envelope: quick attack, gradual decay
       gainNode.gain.setValueAtTime(0, ctx.currentTime);
-      gainNode.gain.linearRampToValueAtTime(volumes[i], ctx.currentTime + 0.01);
-      gainNode.gain.exponentialRampToValueAtTime(volumes[i] * 0.3, ctx.currentTime + 0.3);
+      gainNode.gain.linearRampToValueAtTime(volumesArr[i], ctx.currentTime + 0.01);
+      gainNode.gain.exponentialRampToValueAtTime(volumesArr[i] * 0.3, ctx.currentTime + 0.3);
       gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 1.2);
 
       osc.connect(filter);
       filter.connect(gainNode);
-      gainNode.connect(masterGainRef.current!);
+      gainNode.connect(pianoGain);
 
       osc.start(ctx.currentTime);
       osc.stop(ctx.currentTime + 1.2);
@@ -111,6 +226,7 @@ export const useAudioEngine = () => {
     const ctx = initAudioContext();
     if (ctx.state === "suspended") ctx.resume();
 
+    const drumsGain = instrumentGainsRef.current.drums || masterGainRef.current!;
     const intensity = value / 100;
 
     // Kick drum
@@ -122,11 +238,11 @@ export const useAudioEngine = () => {
     kickGain.gain.setValueAtTime(0.6, ctx.currentTime);
     kickGain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
     kickOsc.connect(kickGain);
-    kickGain.connect(masterGainRef.current!);
+    kickGain.connect(drumsGain);
     kickOsc.start(ctx.currentTime);
     kickOsc.stop(ctx.currentTime + 0.3);
 
-    // Snare drum (noise + tone)
+    // Snare drum
     const snareOsc = ctx.createOscillator();
     const snareGain = ctx.createGain();
     const snareFilter = ctx.createBiquadFilter();
@@ -138,7 +254,7 @@ export const useAudioEngine = () => {
     snareGain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25);
     snareOsc.connect(snareFilter);
     snareFilter.connect(snareGain);
-    snareGain.connect(masterGainRef.current!);
+    snareGain.connect(drumsGain);
     snareOsc.start(ctx.currentTime + 0.1);
     snareOsc.stop(ctx.currentTime + 0.25);
 
@@ -154,7 +270,7 @@ export const useAudioEngine = () => {
     hihatGain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08);
     hihatOsc.connect(hihatFilter);
     hihatFilter.connect(hihatGain);
-    hihatGain.connect(masterGainRef.current!);
+    hihatGain.connect(drumsGain);
     hihatOsc.start(ctx.currentTime);
     hihatOsc.stop(ctx.currentTime + 0.08);
 
@@ -168,7 +284,7 @@ export const useAudioEngine = () => {
       tomGain.gain.setValueAtTime(0.25, ctx.currentTime + 0.15);
       tomGain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
       tomOsc.connect(tomGain);
-      tomGain.connect(masterGainRef.current!);
+      tomGain.connect(drumsGain);
       tomOsc.start(ctx.currentTime + 0.15);
       tomOsc.stop(ctx.currentTime + 0.4);
     }
@@ -179,12 +295,11 @@ export const useAudioEngine = () => {
     const ctx = initAudioContext();
     if (ctx.state === "suspended") ctx.resume();
 
-    // Bass notes (low frequencies)
+    const bassGainNode = instrumentGainsRef.current.bass || masterGainRef.current!;
     const bassNotes = [41.2, 43.65, 49.0, 55.0, 61.74, 65.41, 73.42, 82.41];
     const noteIndex = Math.floor((value / 100) * (bassNotes.length - 1));
     const baseFreq = bassNotes[noteIndex];
 
-    // Main bass oscillator
     const bassOsc = ctx.createOscillator();
     const bassGain = ctx.createGain();
     const bassFilter = ctx.createBiquadFilter();
@@ -202,12 +317,12 @@ export const useAudioEngine = () => {
 
     bassOsc.connect(bassFilter);
     bassFilter.connect(bassGain);
-    bassGain.connect(masterGainRef.current!);
+    bassGain.connect(bassGainNode);
 
     bassOsc.start(ctx.currentTime);
     bassOsc.stop(ctx.currentTime + 0.5);
 
-    // Sub bass for extra depth
+    // Sub bass
     const subOsc = ctx.createOscillator();
     const subGain = ctx.createGain();
 
@@ -218,7 +333,7 @@ export const useAudioEngine = () => {
     subGain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.6);
 
     subOsc.connect(subGain);
-    subGain.connect(masterGainRef.current!);
+    subGain.connect(bassGainNode);
 
     subOsc.start(ctx.currentTime);
     subOsc.stop(ctx.currentTime + 0.6);
@@ -229,11 +344,11 @@ export const useAudioEngine = () => {
     const ctx = initAudioContext();
     if (ctx.state === "suspended") ctx.resume();
 
+    const synthGainNode = instrumentGainsRef.current.synth || masterGainRef.current!;
     const synthNotes = [220, 277.18, 329.63, 369.99, 440, 554.37, 659.25, 739.99];
     const noteIndex = Math.floor((value / 100) * (synthNotes.length - 1));
     const baseFreq = synthNotes[noteIndex];
 
-    // Detuned oscillators for rich synth sound
     const detune = [-10, 0, 10, 7];
     const waveTypes: OscillatorType[] = ["sawtooth", "square", "sawtooth", "triangle"];
 
@@ -259,7 +374,7 @@ export const useAudioEngine = () => {
 
       osc.connect(filter);
       filter.connect(gainNode);
-      gainNode.connect(masterGainRef.current!);
+      gainNode.connect(synthGainNode);
 
       if (delayRef.current && i === 0) {
         gainNode.connect(delayRef.current);
@@ -269,7 +384,7 @@ export const useAudioEngine = () => {
       osc.stop(ctx.currentTime + 0.8);
     });
 
-    // Add some sparkle with high frequency
+    // Sparkle
     const sparkleOsc = ctx.createOscillator();
     const sparkleGain = ctx.createGain();
 
@@ -280,24 +395,19 @@ export const useAudioEngine = () => {
     sparkleGain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
 
     sparkleOsc.connect(sparkleGain);
-    sparkleGain.connect(masterGainRef.current!);
+    sparkleGain.connect(synthGainNode);
 
     sparkleOsc.start(ctx.currentTime);
     sparkleOsc.stop(ctx.currentTime + 0.3);
   }, [initAudioContext]);
 
-  // Harmony sound - Chord progression
+  // Harmony sound
   const playHarmony = useCallback((value: number) => {
     const ctx = initAudioContext();
     if (ctx.state === "suspended") ctx.resume();
 
     const baseFreq = 220 + (value * 2);
-    const frequencies = [
-      baseFreq,
-      baseFreq * 1.25,
-      baseFreq * 1.5,
-      baseFreq * 2,
-    ];
+    const frequencies = [baseFreq, baseFreq * 1.25, baseFreq * 1.5, baseFreq * 2];
 
     frequencies.forEach((freq, i) => {
       setTimeout(() => {
@@ -306,7 +416,7 @@ export const useAudioEngine = () => {
     });
   }, [initAudioContext, playNote]);
 
-  // Rhythm sound - Percussion/beat
+  // Rhythm sound
   const playRhythm = useCallback((bpm: number) => {
     const ctx = initAudioContext();
     if (ctx.state === "suspended") ctx.resume();
@@ -347,7 +457,7 @@ export const useAudioEngine = () => {
     noise.stop(ctx.currentTime + 0.15);
   }, [initAudioContext]);
 
-  // Texture sound - Synth pad with different waveforms
+  // Texture sound
   const playTexture = useCallback((value: number) => {
     const ctx = initAudioContext();
     if (ctx.state === "suspended") ctx.resume();
@@ -362,7 +472,7 @@ export const useAudioEngine = () => {
     playNote(frequency * 1.5, 0.6, type, 0.1);
   }, [initAudioContext, playNote]);
 
-  // Atmosphere sound - Ambient pad with reverb/delay
+  // Atmosphere sound
   const playAtmosphere = useCallback((value: number) => {
     const ctx = initAudioContext();
     if (ctx.state === "suspended") ctx.resume();
@@ -424,7 +534,7 @@ export const useAudioEngine = () => {
     }
   }, [initAudioContext, playNote]);
 
-  // Full playback loop with all instruments
+  // Full playback loop
   const startPlayback = useCallback((options: AudioEngineOptions) => {
     if (isPlayingRef.current) return;
     isPlayingRef.current = true;
@@ -438,44 +548,37 @@ export const useAudioEngine = () => {
     intervalRef.current = setInterval(() => {
       if (!isPlayingRef.current) return;
 
-      // Drums on every beat (if enabled)
       if (options.drums > 10) {
         playDrums(options.drums);
       }
 
-      // Bass on 1 and 3 beats
       if (beatCount % 2 === 0 && options.bass > 10) {
         playBass(options.bass);
       }
 
-      // Piano chord on every 4th beat
       if (beatCount % 4 === 0 && options.piano > 10) {
         playPiano(options.piano);
       }
 
-      // Synth lead melody
       if (beatCount % 2 === 1 && options.synth > 10) {
         playSynth(options.synth);
       }
 
-      // Play harmony on every 4th beat
       if (beatCount % 4 === 0) {
         playHarmony(options.harmony);
       }
 
-      // Play texture variation
       if (beatCount % 2 === 0) {
         playTexture(options.texture);
       }
 
-      // Play atmosphere ambient pad every 8 beats
       if (beatCount % 8 === 0) {
         playAtmosphere(options.atmosphere);
       }
 
       beatCount++;
     }, beatInterval);
-  }, [initAudioContext, playDrums, playBass, playPiano, playSynth, playRhythm, playHarmony, playTexture, playAtmosphere]);
+  }, [initAudioContext, playDrums, playBass, playPiano, playSynth, playHarmony, playTexture, playAtmosphere]);
 
   const stopPlayback = useCallback(() => {
     isPlayingRef.current = false;
@@ -513,5 +616,13 @@ export const useAudioEngine = () => {
     playSynth,
     startPlayback,
     stopPlayback,
+    // Recording
+    isRecording,
+    startRecording,
+    stopRecording,
+    exportRecording,
+    // Volumes
+    volumes,
+    updateVolume,
   };
 };
