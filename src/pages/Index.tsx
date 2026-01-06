@@ -55,7 +55,18 @@ const Index = () => {
     volumes,
     updateVolume,
     generateFromLyrics,
+    getAnalyser,
   } = useAudioEngine();
+
+  const [analyser, setAnalyser] = useState<AnalyserNode | null>(null);
+
+  // Get analyser when playing starts
+  useEffect(() => {
+    if (isPlaying) {
+      const analyserNode = getAnalyser();
+      setAnalyser(analyserNode);
+    }
+  }, [isPlaying, getAnalyser]);
 
   const musicIntensity = (harmony + rhythm / 2 + texture + atmosphere + piano + drums + bass + synth) / 8;
 
@@ -295,7 +306,7 @@ const Index = () => {
             />
             <WaveformVisualizer
               isPlaying={isPlaying}
-              analyser={null}
+              analyser={analyser}
               piano={piano}
               drums={drums}
               bass={bass}
@@ -303,6 +314,7 @@ const Index = () => {
             />
             <Equalizer
               isPlaying={isPlaying}
+              analyser={analyser}
               piano={piano}
               drums={drums}
               bass={bass}
@@ -322,6 +334,7 @@ const Index = () => {
             <div className="lg:hidden space-y-2">
               <Equalizer
                 isPlaying={isPlaying}
+                analyser={analyser}
                 piano={piano}
                 drums={drums}
                 bass={bass}
@@ -331,7 +344,7 @@ const Index = () => {
               />
               <WaveformVisualizer
                 isPlaying={isPlaying}
-                analyser={null}
+                analyser={analyser}
                 piano={piano}
                 drums={drums}
                 bass={bass}
