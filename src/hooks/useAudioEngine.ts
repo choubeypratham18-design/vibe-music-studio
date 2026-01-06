@@ -220,8 +220,66 @@ export const useAudioEngine = () => {
     });
   }, []);
 
+  // Convert AudioBuffer to WAV format
+  const audioBufferToWav = useCallback((buffer: AudioBuffer): ArrayBuffer => {
+    const numChannels = buffer.numberOfChannels;
+    const sampleRate = buffer.sampleRate;
+    const format = 1; // PCM
+    const bitDepth = 16;
+    
+    const bytesPerSample = bitDepth / 8;
+    const blockAlign = numChannels * bytesPerSample;
+    
+    const samples = buffer.length;
+    const dataSize = samples * blockAlign;
+    const headerSize = 44;
+    const totalSize = headerSize + dataSize;
+    
+    const arrayBuffer = new ArrayBuffer(totalSize);
+    const view = new DataView(arrayBuffer);
+    
+    // WAV header
+    const writeString = (offset: number, str: string) => {
+      for (let i = 0; i < str.length; i++) {
+        view.setUint8(offset + i, str.charCodeAt(i));
+      }
+    };
+    
+    writeString(0, 'RIFF');
+    view.setUint32(4, totalSize - 8, true);
+    writeString(8, 'WAVE');
+    writeString(12, 'fmt ');
+    view.setUint32(16, 16, true); // fmt chunk size
+    view.setUint16(20, format, true);
+    view.setUint16(22, numChannels, true);
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * blockAlign, true);
+    view.setUint16(32, blockAlign, true);
+    view.setUint16(34, bitDepth, true);
+    writeString(36, 'data');
+    view.setUint32(40, dataSize, true);
+    
+    // Interleave audio data
+    const channels: Float32Array[] = [];
+    for (let ch = 0; ch < numChannels; ch++) {
+      channels.push(buffer.getChannelData(ch));
+    }
+    
+    let offset = 44;
+    for (let i = 0; i < samples; i++) {
+      for (let ch = 0; ch < numChannels; ch++) {
+        const sample = Math.max(-1, Math.min(1, channels[ch][i]));
+        const int16 = sample < 0 ? sample * 0x8000 : sample * 0x7FFF;
+        view.setInt16(offset, int16, true);
+        offset += 2;
+      }
+    }
+    
+    return arrayBuffer;
+  }, []);
+
   // Export recording as downloadable file
-  const exportRecording = useCallback(async () => {
+  const exportRecording = useCallback(async (format: 'wav' | 'mp3' = 'wav') => {
     let blob = recordedBlobRef.current;
     
     if (isRecording && mediaRecorderRef.current) {
@@ -229,19 +287,44 @@ export const useAudioEngine = () => {
     }
     
     if (blob && blob.size > 0) {
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `nova-ai-track-${Date.now()}.webm`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      recordedBlobRef.current = null;
-      return blob;
+      // Convert WebM to WAV
+      const audioContext = new AudioContext();
+      const arrayBuffer = await blob.arrayBuffer();
+      
+      try {
+        const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+        const wavBuffer = audioBufferToWav(audioBuffer);
+        const wavBlob = new Blob([wavBuffer], { type: 'audio/wav' });
+        
+        const url = URL.createObjectURL(wavBlob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `nova-ai-track-${Date.now()}.wav`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        audioContext.close();
+        recordedBlobRef.current = null;
+        return wavBlob;
+      } catch (error) {
+        // Fallback to WebM if conversion fails
+        console.warn('WAV conversion failed, falling back to WebM:', error);
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `nova-ai-track-${Date.now()}.webm`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        audioContext.close();
+        recordedBlobRef.current = null;
+        return blob;
+      }
     }
     return null;
-  }, [isRecording, stopRecording]);
+  }, [isRecording, stopRecording, audioBufferToWav]);
 
   // Generate music based on lyrics
   const generateFromLyrics = useCallback((lyrics: string, genre: string) => {
