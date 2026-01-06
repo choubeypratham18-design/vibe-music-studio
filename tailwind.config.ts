@@ -7,15 +7,20 @@ export default {
   theme: {
     container: {
       center: true,
-      padding: "2rem",
+      padding: "1rem",
       screens: {
+        sm: "640px",
+        md: "768px",
+        lg: "1024px",
+        xl: "1280px",
         "2xl": "1400px",
       },
     },
     extend: {
       fontFamily: {
         display: ["Orbitron", "sans-serif"],
-        body: ["Rajdhani", "sans-serif"],
+        body: ["Sora", "sans-serif"],
+        mono: ["Space Grotesk", "monospace"],
       },
       colors: {
         border: "hsl(var(--border))",
@@ -61,6 +66,12 @@ export default {
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
         },
+        // AI Theme colors
+        "ai-purple": "hsl(var(--ai-purple))",
+        "ai-pink": "hsl(var(--ai-pink))",
+        "ai-blue": "hsl(var(--ai-blue))",
+        "ai-cyan": "hsl(var(--ai-cyan))",
+        "ai-gold": "hsl(var(--ai-gold))",
       },
       borderRadius: {
         lg: "var(--radius)",
@@ -88,7 +99,8 @@ export default {
       },
       backgroundImage: {
         "gradient-radial": "radial-gradient(var(--tw-gradient-stops))",
-        "cyber-gradient": "linear-gradient(135deg, hsl(var(--primary) / 0.2) 0%, transparent 50%, hsl(var(--accent) / 0.2) 100%)",
+        "ai-gradient": "linear-gradient(135deg, hsl(var(--ai-purple)) 0%, hsl(var(--ai-pink)) 50%, hsl(var(--ai-blue)) 100%)",
+        "cyber-gradient": "linear-gradient(135deg, hsl(var(--ai-purple) / 0.2) 0%, transparent 50%, hsl(var(--ai-pink) / 0.2) 100%)",
       },
     },
   },
