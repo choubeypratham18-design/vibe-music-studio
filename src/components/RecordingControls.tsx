@@ -1,4 +1,4 @@
-import { Mic, Square, Download, CircleDot } from "lucide-react";
+import { Mic, Square, Download, CircleDot, FileAudio } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -7,7 +7,7 @@ interface RecordingControlsProps {
   isPlaying: boolean;
   onStartRecording: () => void;
   onStopRecording: () => void;
-  onExport: () => void;
+  onExport: (format: 'wav' | 'mp3') => void;
 }
 
 export const RecordingControls = ({
@@ -62,19 +62,21 @@ export const RecordingControls = ({
             STOP
           </Button>
         )}
+      </div>
 
+      <div className="flex gap-2">
         <Button
-          onClick={onExport}
+          onClick={() => onExport('wav')}
           disabled={isRecording}
           variant="outline"
           className={cn(
-            "gap-1 sm:gap-2 font-display text-[10px] sm:text-xs h-8 sm:h-9",
+            "flex-1 gap-1 sm:gap-2 font-display text-[10px] sm:text-xs h-8 sm:h-9",
             "border-ai-cyan/50 text-ai-cyan hover:bg-ai-cyan/10",
             "disabled:opacity-50"
           )}
         >
-          <Download className="h-3 w-3" />
-          <span className="hidden sm:inline">EXPORT</span>
+          <FileAudio className="h-3 w-3" />
+          WAV
         </Button>
       </div>
 
@@ -83,7 +85,7 @@ export const RecordingControls = ({
           ? "Play music to start recording" 
           : isRecording 
             ? "Recording in progress..." 
-            : "Ready to record"}
+            : "Export as WAV for music players"}
       </p>
     </div>
   );

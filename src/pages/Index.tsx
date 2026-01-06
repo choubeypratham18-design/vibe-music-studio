@@ -202,10 +202,10 @@ const Index = () => {
     });
   };
 
-  const handleExport = async () => {
-    const blob = await exportRecording();
+  const handleExport = async (format: 'wav' | 'mp3' = 'wav') => {
+    const blob = await exportRecording(format);
     if (blob) {
-      toast.success("Track Exported!");
+      toast.success(`Track Exported as ${format.toUpperCase()}!`);
     } else {
       toast.warning("No recording to export");
     }
