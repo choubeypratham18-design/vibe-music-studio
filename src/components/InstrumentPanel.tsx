@@ -1,4 +1,5 @@
 import { MusicParameter } from "./MusicParameter";
+import { Piano, Drum, Guitar, Waves } from "lucide-react";
 
 interface InstrumentPanelProps {
   piano: number;
@@ -30,21 +31,21 @@ export const InstrumentPanel = ({
   onSynthInteract,
 }: InstrumentPanelProps) => {
   return (
-    <div className="space-y-3">
-      <div className="flex items-center gap-2 mb-2">
-        <span className="text-lg">🎹</span>
-        <h2 className="font-display text-sm font-semibold tracking-wider text-primary glow-text">
+    <div className="space-y-2 sm:space-y-3">
+      <div className="flex items-center gap-2 mb-1 sm:mb-2">
+        <Piano className="w-4 h-4 text-ai-purple" />
+        <h2 className="font-display text-xs font-semibold tracking-wider text-ai-purple">
           INSTRUMENTS
         </h2>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
-        <div className="glass-panel p-3 space-y-2">
+      <div className="grid grid-cols-2 gap-2 sm:gap-3">
+        <div className="glass-panel p-2 sm:p-3 space-y-2">
           <div className="flex items-center gap-2">
-            <span className="text-xl">🎹</span>
+            <Piano className="w-4 h-4 text-ai-purple" />
             <div>
-              <h3 className="font-display text-xs font-semibold tracking-wider text-primary">PIANO</h3>
-              <p className="text-[10px] text-muted-foreground">Grand keys</p>
+              <h3 className="font-display text-[10px] sm:text-xs font-semibold tracking-wider text-ai-purple">PIANO</h3>
+              <p className="text-[9px] text-muted-foreground hidden sm:block">Grand keys</p>
             </div>
           </div>
           <MusicParameter
@@ -57,12 +58,12 @@ export const InstrumentPanel = ({
           />
         </div>
 
-        <div className="glass-panel p-3 space-y-2">
+        <div className="glass-panel p-2 sm:p-3 space-y-2">
           <div className="flex items-center gap-2">
-            <span className="text-xl">🥁</span>
+            <Drum className="w-4 h-4 text-ai-pink" />
             <div>
-              <h3 className="font-display text-xs font-semibold tracking-wider text-accent">DRUMS</h3>
-              <p className="text-[10px] text-muted-foreground">Full kit</p>
+              <h3 className="font-display text-[10px] sm:text-xs font-semibold tracking-wider text-ai-pink">DRUMS</h3>
+              <p className="text-[9px] text-muted-foreground hidden sm:block">Full kit</p>
             </div>
           </div>
           <MusicParameter
@@ -75,12 +76,12 @@ export const InstrumentPanel = ({
           />
         </div>
 
-        <div className="glass-panel p-3 space-y-2">
+        <div className="glass-panel p-2 sm:p-3 space-y-2">
           <div className="flex items-center gap-2">
-            <span className="text-xl">🎸</span>
+            <Guitar className="w-4 h-4 text-ai-blue" />
             <div>
-              <h3 className="font-display text-xs font-semibold tracking-wider text-primary">BASS</h3>
-              <p className="text-[10px] text-muted-foreground">Deep low end</p>
+              <h3 className="font-display text-[10px] sm:text-xs font-semibold tracking-wider text-ai-blue">BASS</h3>
+              <p className="text-[9px] text-muted-foreground hidden sm:block">Deep low end</p>
             </div>
           </div>
           <MusicParameter
@@ -93,12 +94,12 @@ export const InstrumentPanel = ({
           />
         </div>
 
-        <div className="glass-panel p-3 space-y-2">
+        <div className="glass-panel p-2 sm:p-3 space-y-2">
           <div className="flex items-center gap-2">
-            <span className="text-xl">🎛️</span>
+            <Waves className="w-4 h-4 text-ai-cyan" />
             <div>
-              <h3 className="font-display text-xs font-semibold tracking-wider text-accent">SYNTH</h3>
-              <p className="text-[10px] text-muted-foreground">Electronic</p>
+              <h3 className="font-display text-[10px] sm:text-xs font-semibold tracking-wider text-ai-cyan">SYNTH</h3>
+              <p className="text-[9px] text-muted-foreground hidden sm:block">Electronic</p>
             </div>
           </div>
           <MusicParameter

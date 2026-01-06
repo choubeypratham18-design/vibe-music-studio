@@ -22,18 +22,18 @@ const Slider = React.forwardRef<
       <SliderPrimitive.Range 
         className={cn(
           "absolute h-full",
-          variant === "accent" && "bg-gradient-to-r from-accent/80 to-accent",
-          variant === "primary" && "bg-gradient-to-r from-primary/80 to-primary",
-          variant === "default" && "bg-gradient-to-r from-primary/80 to-primary"
+          variant === "accent" && "bg-gradient-to-r from-ai-pink/80 to-ai-pink",
+          variant === "primary" && "bg-gradient-to-r from-ai-purple/80 to-ai-purple",
+          variant === "default" && "bg-gradient-to-r from-ai-purple/80 to-ai-purple"
         )}
       />
     </SliderPrimitive.Track>
     <SliderPrimitive.Thumb 
       className={cn(
-        "block h-4 w-4 rounded-full border-2 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50",
-        variant === "accent" && "border-accent bg-accent shadow-[0_0_10px_hsl(45_100%_50%/0.5)] focus-visible:ring-accent",
-        variant === "primary" && "border-primary bg-primary shadow-[0_0_10px_hsl(187_100%_50%/0.5)] focus-visible:ring-primary",
-        variant === "default" && "border-primary bg-primary shadow-[0_0_10px_hsl(187_100%_50%/0.5)] focus-visible:ring-primary"
+        "block h-3 w-3 sm:h-4 sm:w-4 rounded-full border-2 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50",
+        variant === "accent" && "border-ai-pink bg-ai-pink shadow-[0_0_10px_hsl(320_100%_60%/0.5)] focus-visible:ring-ai-pink",
+        variant === "primary" && "border-ai-purple bg-ai-purple shadow-[0_0_10px_hsl(280_100%_65%/0.5)] focus-visible:ring-ai-purple",
+        variant === "default" && "border-ai-purple bg-ai-purple shadow-[0_0_10px_hsl(280_100%_65%/0.5)] focus-visible:ring-ai-purple"
       )}
     />
   </SliderPrimitive.Root>

@@ -1,4 +1,4 @@
-import { Play, Pause, SkipBack, SkipForward } from "lucide-react";
+import { Play, Pause, SkipBack, SkipForward, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -16,88 +16,77 @@ export const PlaybackControls = ({
   currentTime,
 }: PlaybackControlsProps) => {
   return (
-    <div className="glass-panel p-4">
-      <div className="flex items-center justify-between">
+    <div className="glass-panel p-2 sm:p-4">
+      <div className="flex items-center justify-between gap-2">
         {/* Left: Engine status */}
-        <div className="flex items-center gap-4">
+        <div className="hidden sm:flex items-center gap-2 sm:gap-4">
           <div className="flex items-center gap-2">
             <div className={cn(
               "w-2 h-2 rounded-full",
-              isPlaying ? "bg-green-400 animate-pulse" : "bg-muted-foreground"
+              isPlaying ? "bg-ai-cyan animate-pulse" : "bg-muted-foreground"
             )} />
-            <span className="text-xs font-display">
-              ENGINE: <span className={isPlaying ? "text-green-400" : "text-muted-foreground"}>
-                {isPlaying ? "ACTIVE" : "STANDBY"}
+            <span className="text-[10px] sm:text-xs font-display">
+              AI: <span className={isPlaying ? "text-ai-cyan" : "text-muted-foreground"}>
+                {isPlaying ? "GENERATING" : "IDLE"}
               </span>
             </span>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-muted-foreground">⚡ NODES:</span>
-            <span className="text-xs text-primary font-display">1,245</span>
+          <div className="hidden md:flex items-center gap-2">
+            <Sparkles className="w-3 h-3 text-ai-purple" />
+            <span className="text-[10px] text-ai-purple font-display">NOVA AI</span>
           </div>
         </div>
 
         {/* Center: Playback controls */}
-        <div className="flex flex-col items-center gap-2">
-          <div className="flex items-center gap-3">
+        <div className="flex flex-col items-center gap-1 sm:gap-2 flex-1 sm:flex-none">
+          <div className="flex items-center gap-2 sm:gap-3">
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8 text-muted-foreground hover:text-foreground"
+              className="h-6 w-6 sm:h-8 sm:w-8 text-muted-foreground hover:text-foreground"
             >
-              <SkipBack className="h-4 w-4" />
+              <SkipBack className="h-3 w-3 sm:h-4 sm:w-4" />
             </Button>
             
             <Button
               onClick={onPlayPause}
               className={cn(
-                "h-12 w-12 rounded-full transition-all duration-300",
+                "h-10 w-10 sm:h-12 sm:w-12 rounded-full transition-all duration-300",
                 isPlaying 
-                  ? "bg-primary hover:bg-primary/90 glow-box" 
-                  : "bg-primary/20 border border-primary hover:bg-primary/30"
+                  ? "bg-gradient-to-r from-ai-purple to-ai-pink hover:opacity-90 glow-box" 
+                  : "bg-ai-purple/20 border border-ai-purple hover:bg-ai-purple/30"
               )}
             >
               {isPlaying ? (
-                <Pause className="h-5 w-5" />
+                <Pause className="h-4 w-4 sm:h-5 sm:w-5" />
               ) : (
-                <Play className="h-5 w-5 ml-0.5" />
+                <Play className="h-4 w-4 sm:h-5 sm:w-5 ml-0.5" />
               )}
             </Button>
 
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8 text-muted-foreground hover:text-foreground"
+              className="h-6 w-6 sm:h-8 sm:w-8 text-muted-foreground hover:text-foreground"
             >
-              <SkipForward className="h-4 w-4" />
+              <SkipForward className="h-3 w-3 sm:h-4 sm:w-4" />
             </Button>
           </div>
 
-          <div className="flex items-center gap-2 text-xs">
-            <span className="text-muted-foreground">◉ TRANSMITTING</span>
-            <span className="font-display text-2xl text-foreground">{bpm}</span>
+          <div className="flex items-center gap-1 sm:gap-2 text-[10px] sm:text-xs">
+            <span className="font-display text-lg sm:text-2xl ai-gradient-text">{bpm}</span>
             <span className="text-muted-foreground">BPM</span>
           </div>
         </div>
 
         {/* Right: Time and status */}
-        <div className="flex items-center gap-4">
-          <Button
-            variant="outline"
-            size="sm"
-            className="font-display text-xs border-accent/50 text-accent hover:bg-accent/10"
-          >
-            PAST
-          </Button>
-          <div className="flex items-center gap-2">
-            <div className="flex gap-1">
-              <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-              <div className="w-2 h-2 rounded-full bg-accent animate-pulse" style={{ animationDelay: "0.2s" }} />
-              <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" style={{ animationDelay: "0.4s" }} />
-              <div className="w-2 h-2 rounded-full bg-pink-400 animate-pulse" style={{ animationDelay: "0.6s" }} />
-            </div>
+        <div className="flex items-center gap-2 sm:gap-4">
+          <div className="hidden sm:flex gap-1">
+            <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-ai-purple animate-pulse" />
+            <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-ai-pink animate-pulse" style={{ animationDelay: "0.2s" }} />
+            <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-ai-cyan animate-pulse" style={{ animationDelay: "0.4s" }} />
           </div>
-          <span className="font-display text-sm text-accent">{currentTime}</span>
+          <span className="font-display text-xs sm:text-sm text-ai-pink">{currentTime}</span>
         </div>
       </div>
     </div>

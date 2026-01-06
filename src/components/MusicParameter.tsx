@@ -31,15 +31,15 @@ export const MusicParameter = ({
   };
   
   return (
-    <div className="glass-panel p-4 space-y-3">
+    <div className="glass-panel p-2 sm:p-4 space-y-2 sm:space-y-3">
       <div className="flex justify-between items-start">
         <div>
-          <h3 className={`font-display text-sm font-semibold tracking-wider ${variant === "accent" ? "text-accent glow-text-accent" : "text-primary glow-text"}`}>
+          <h3 className={`font-display text-xs sm:text-sm font-semibold tracking-wider ${variant === "accent" ? "text-ai-pink glow-text-accent" : "text-ai-purple glow-text"}`}>
             {label}
           </h3>
-          <p className="text-xs text-muted-foreground">{sublabel}</p>
+          <p className="text-[9px] sm:text-xs text-muted-foreground">{sublabel}</p>
         </div>
-        <span className={`font-display text-lg font-bold ${variant === "accent" ? "text-accent" : "text-primary"}`}>
+        <span className={`font-display text-base sm:text-lg font-bold ${variant === "accent" ? "text-ai-pink" : "text-ai-purple"}`}>
           {displayValue}{unit}
         </span>
       </div>
@@ -54,7 +54,7 @@ export const MusicParameter = ({
           variant={variant}
           className="cursor-pointer"
         />
-        <div className="flex justify-between text-[10px] text-muted-foreground">
+        <div className="flex justify-between text-[8px] sm:text-[10px] text-muted-foreground">
           <span>{min}{unit}</span>
           <span>{max}{unit}</span>
         </div>

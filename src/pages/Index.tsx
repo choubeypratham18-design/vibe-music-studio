@@ -12,6 +12,9 @@ import { UniverseBackground } from "@/components/UniverseBackground";
 import { VolumeControls } from "@/components/VolumeControls";
 import { RecordingControls } from "@/components/RecordingControls";
 import { Equalizer } from "@/components/Equalizer";
+import { WaveformVisualizer } from "@/components/WaveformVisualizer";
+import { PresetManager } from "@/components/PresetManager";
+import { AIPromptInput } from "@/components/AIPromptInput";
 import { useAudioEngine } from "@/hooks/useAudioEngine";
 import { toast } from "sonner";
 
@@ -30,6 +33,8 @@ const Index = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [currentTime, setCurrentTime] = useState("00:00:00");
   const [recordingTime, setRecordingTime] = useState(0);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [activePanel, setActivePanel] = useState<"left" | "right">("right");
 
   const { 
     playHarmony, 
@@ -52,7 +57,6 @@ const Index = () => {
     generateFromLyrics,
   } = useAudioEngine();
 
-  // Calculate overall intensity for universe background
   const musicIntensity = (harmony + rhythm / 2 + texture + atmosphere + piano + drums + bass + synth) / 8;
 
   useEffect(() => {
@@ -65,7 +69,6 @@ const Index = () => {
     return () => clearInterval(interval);
   }, []);
 
-  // Recording time tracker
   useEffect(() => {
     let interval: NodeJS.Timeout;
     if (isRecording) {
@@ -88,21 +91,19 @@ const Index = () => {
   const handleGenerate = () => {
     if (!lyrics.trim()) {
       toast.warning("Please enter lyrics first", {
-        description: "Write some lyrics in Soul Patch to generate music",
+        description: "Write some lyrics to generate AI music",
       });
       return;
     }
 
     setIsGenerating(true);
-    toast.info("Reality Engine initializing...", {
-      description: "Analyzing lyrics and generating your unique vibe composition",
+    toast.info("AI Processing...", {
+      description: "Analyzing your input and generating unique music",
     });
     
-    // Generate parameters from lyrics
     const generatedParams = generateFromLyrics(lyrics, selectedGenre);
     
     setTimeout(() => {
-      // Apply generated parameters
       setHarmony(generatedParams.harmony);
       setAtmosphere(generatedParams.atmosphere);
       setPiano(generatedParams.piano);
@@ -113,76 +114,130 @@ const Index = () => {
       
       setIsGenerating(false);
       setIsPlaying(true);
-      toast.success("Vibe Generated from Lyrics!", {
-        description: `${selectedGenre.toUpperCase()} track ready at ${rhythm} BPM - Mood: ${generatedParams.harmony > 50 ? 'Happy' : 'Melancholic'}`,
+      toast.success("AI Music Generated!", {
+        description: `${selectedGenre.toUpperCase()} at ${rhythm} BPM - Mood: ${generatedParams.harmony > 50 ? 'Upbeat' : 'Chill'}`,
       });
-    }, 3000);
+    }, 2500);
+  };
+
+  const handleAIPromptGenerate = (params: {
+    harmony: number;
+    rhythm: number;
+    texture: number;
+    atmosphere: number;
+    piano: number;
+    drums: number;
+    bass: number;
+    synth: number;
+    genre: string;
+  }) => {
+    setHarmony(params.harmony);
+    setRhythm(params.rhythm);
+    setTexture(params.texture);
+    setAtmosphere(params.atmosphere);
+    setPiano(params.piano);
+    setDrums(params.drums);
+    setBass(params.bass);
+    setSynth(params.synth);
+    setSelectedGenre(params.genre);
+    setIsPlaying(true);
+  };
+
+  const handleLoadPreset = (params: {
+    harmony: number;
+    rhythm: number;
+    texture: number;
+    atmosphere: number;
+    piano: number;
+    drums: number;
+    bass: number;
+    synth: number;
+    genre: string;
+  }) => {
+    setHarmony(params.harmony);
+    setRhythm(params.rhythm);
+    setTexture(params.texture);
+    setAtmosphere(params.atmosphere);
+    setPiano(params.piano);
+    setDrums(params.drums);
+    setBass(params.bass);
+    setSynth(params.synth);
+    setSelectedGenre(params.genre);
   };
 
   const handleVocalizeOnly = () => {
     if (!lyrics.trim()) {
-      toast.warning("Please enter lyrics first", {
-        description: "Write some lyrics to vocalize",
-      });
+      toast.warning("Please enter lyrics first");
       return;
     }
     toast.info("Vocalization Mode", {
-      description: "Generating vocals for your lyrics...",
+      description: "Generating vocals...",
     });
   };
 
   const handleStartRecording = () => {
     if (!isPlaying) {
-      toast.warning("Start playing music first", {
-        description: "Play music before recording",
-      });
+      toast.warning("Start playing music first");
       return;
     }
     startRecording();
-    toast.info("Recording Started", {
-      description: "Your music is being captured...",
-    });
+    toast.info("Recording Started");
   };
 
   const handleStopRecording = async () => {
     await stopRecording();
     toast.success("Recording Stopped", {
-      description: `Recorded ${recordingTime} seconds - Ready to export`,
+      description: `Recorded ${recordingTime} seconds`,
     });
   };
 
   const handleExport = async () => {
     const blob = await exportRecording();
     if (blob) {
-      toast.success("Track Exported!", {
-        description: "Your music has been downloaded to your system",
-      });
+      toast.success("Track Exported!");
     } else {
-      toast.warning("No recording to export", {
-        description: "Record some music first before exporting",
-      });
+      toast.warning("No recording to export");
     }
   };
 
   const handleBpmChange = (bpm: number) => {
     setRhythm(bpm);
-    toast.info(`Speed Changed: ${bpm} BPM`, {
-      description: bpm <= 80 ? "Slow tempo" : bpm <= 120 ? "Medium tempo" : "Fast tempo",
-    });
+    toast.info(`Speed: ${bpm} BPM`);
   };
 
   return (
     <div className="min-h-screen overflow-hidden relative">
-      {/* Universe Background */}
       <UniverseBackground isPlaying={isPlaying} intensity={musicIntensity} />
       
-      {/* Content Layer */}
-      <div className="relative z-10">
-        <Header />
+      <div className="relative z-10 flex flex-col h-screen">
+        <Header 
+          onMenuToggle={() => setIsMobileMenuOpen(!isMobileMenuOpen)} 
+          isMenuOpen={isMobileMenuOpen} 
+        />
         
-        <main className="h-[calc(100vh-73px-88px)] flex">
+        {/* Mobile Panel Toggle */}
+        <div className="lg:hidden flex border-b border-border/30 bg-background/50 backdrop-blur-sm">
+          <button
+            onClick={() => setActivePanel("left")}
+            className={`flex-1 py-2 text-xs font-display ${activePanel === "left" ? "text-ai-purple border-b-2 border-ai-purple" : "text-muted-foreground"}`}
+          >
+            PARAMETERS
+          </button>
+          <button
+            onClick={() => setActivePanel("right")}
+            className={`flex-1 py-2 text-xs font-display ${activePanel === "right" ? "text-ai-pink border-b-2 border-ai-pink" : "text-muted-foreground"}`}
+          >
+            CONTROLS
+          </button>
+        </div>
+
+        <main className="flex-1 flex overflow-hidden">
           {/* Left Panel - Parameters */}
-          <aside className="w-72 p-4 space-y-4 overflow-y-auto border-r border-border/30 bg-background/30 backdrop-blur-sm">
+          <aside className={`
+            ${activePanel === "left" ? "flex" : "hidden"} lg:flex
+            w-full lg:w-72 xl:w-80 p-2 sm:p-4 space-y-2 sm:space-y-4 overflow-y-auto 
+            border-r border-border/30 bg-background/30 backdrop-blur-sm flex-col
+          `}>
             <MusicParameter
               label="HARMONY"
               sublabel="Chord tension"
@@ -193,7 +248,7 @@ const Index = () => {
             />
             <MusicParameter
               label="RHYTHM"
-              sublabel="Tempo & syncopation"
+              sublabel="Tempo & sync"
               value={rhythm}
               onChange={setRhythm}
               onInteract={playRhythm}
@@ -212,22 +267,24 @@ const Index = () => {
             />
             <MusicParameter
               label="ATMOSPHERE"
-              sublabel="Reverb & Delay mix"
+              sublabel="Reverb & Delay"
               value={atmosphere}
               onChange={setAtmosphere}
               onInteract={playAtmosphere}
               variant="primary"
             />
-
-            {/* Volume Controls */}
             <VolumeControls 
               volumes={volumes} 
               onVolumeChange={updateVolume} 
             />
+            <PresetManager
+              currentParams={{ harmony, rhythm, texture, atmosphere, piano, drums, bass, synth, genre: selectedGenre }}
+              onLoadPreset={handleLoadPreset}
+            />
           </aside>
 
-          {/* Center - Visualization */}
-          <section className="flex-1 p-4 relative flex flex-col gap-4">
+          {/* Center - Visualization (hidden on mobile, shown on larger screens) */}
+          <section className="hidden lg:flex flex-1 p-2 sm:p-4 relative flex-col gap-2 sm:gap-4">
             <ParticleVisualization
               isPlaying={isPlaying}
               bpm={rhythm}
@@ -236,8 +293,14 @@ const Index = () => {
               texture={texture}
               atmosphere={atmosphere}
             />
-            
-            {/* Equalizer Display */}
+            <WaveformVisualizer
+              isPlaying={isPlaying}
+              analyser={null}
+              piano={piano}
+              drums={drums}
+              bass={bass}
+              synth={synth}
+            />
             <Equalizer
               isPlaying={isPlaying}
               piano={piano}
@@ -250,7 +313,34 @@ const Index = () => {
           </section>
 
           {/* Right Panel - Controls */}
-          <aside className="w-96 p-4 space-y-4 overflow-y-auto border-l border-border/30 bg-background/30 backdrop-blur-sm">
+          <aside className={`
+            ${activePanel === "right" ? "flex" : "hidden"} lg:flex
+            w-full lg:w-80 xl:w-96 p-2 sm:p-4 space-y-2 sm:space-y-4 overflow-y-auto 
+            border-l border-border/30 bg-background/30 backdrop-blur-sm flex-col
+          `}>
+            {/* Mobile-only visualizations */}
+            <div className="lg:hidden space-y-2">
+              <Equalizer
+                isPlaying={isPlaying}
+                piano={piano}
+                drums={drums}
+                bass={bass}
+                synth={synth}
+                harmony={harmony}
+                rhythm={rhythm}
+              />
+              <WaveformVisualizer
+                isPlaying={isPlaying}
+                analyser={null}
+                piano={piano}
+                drums={drums}
+                bass={bass}
+                synth={synth}
+              />
+            </div>
+
+            <AIPromptInput onGenerate={handleAIPromptGenerate} />
+
             <InstrumentPanel
               piano={piano}
               drums={drums}
@@ -266,7 +356,6 @@ const Index = () => {
               onSynthInteract={playSynth}
             />
 
-            {/* Recording Controls */}
             <RecordingControls
               isRecording={isRecording}
               isPlaying={isPlaying}
@@ -295,7 +384,7 @@ const Index = () => {
         </main>
 
         {/* Bottom - Playback */}
-        <footer className="h-[88px] border-t border-border/30 bg-background/50 backdrop-blur-sm">
+        <footer className="border-t border-border/30 bg-background/50 backdrop-blur-sm">
           <PlaybackControls
             isPlaying={isPlaying}
             onPlayPause={() => setIsPlaying(!isPlaying)}
