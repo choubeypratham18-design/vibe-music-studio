@@ -17,7 +17,11 @@ import { LockableMusicParameter } from "@/components/LockableMusicParameter";
 import { LockableInstrumentPanel } from "@/components/LockableInstrumentPanel";
 import { AISuggestionsPanel } from "@/components/AISuggestionsPanel";
 import { ParameterHistory, HistoryEntry } from "@/components/ParameterHistory";
+import { CollaborativeFeedback } from "@/components/CollaborativeFeedback";
+import { ABComparisonMode } from "@/components/ABComparisonMode";
+import { KeyboardShortcutsHint } from "@/components/KeyboardShortcutsHint";
 import { useAudioEngine } from "@/hooks/useAudioEngine";
+import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { toast } from "sonner";
 
 const Index = () => {
@@ -44,6 +48,12 @@ const Index = () => {
   // History tracking
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const lastSavedParams = useRef<string>("");
+
+  // A/B Comparison mode
+  const [isABModeEnabled, setIsABModeEnabled] = useState(false);
+
+  // All parameter keys for lock/unlock all
+  const allParamKeys = ["harmony", "rhythm", "texture", "atmosphere", "piano", "drums", "bass", "synth"];
 
   const { 
     playHarmony, 
@@ -169,6 +179,45 @@ const Index = () => {
       return newSet;
     });
   };
+
+  // Lock all parameters
+  const handleLockAll = useCallback(() => {
+    setLockedParams(new Set(allParamKeys));
+    toast.success("All parameters locked", {
+      description: "AI and collaborator suggestions won't affect any parameter",
+    });
+  }, []);
+
+  // Unlock all parameters
+  const handleUnlockAll = useCallback(() => {
+    setLockedParams(new Set());
+    toast.success("All parameters unlocked");
+  }, []);
+
+  // Undo - revert to last history entry
+  const handleUndo = useCallback(() => {
+    if (history.length > 0) {
+      const lastEntry = history[0];
+      handleRevertToHistory(lastEntry.params);
+      toast.info("Undone to previous state");
+    } else {
+      toast.warning("No history to undo");
+    }
+  }, [history]);
+
+  // Toggle A/B mode
+  const handleToggleAB = useCallback(() => {
+    setIsABModeEnabled(prev => !prev);
+  }, []);
+
+  // Keyboard shortcuts
+  useKeyboardShortcuts({
+    onPlayPause: () => setIsPlaying(prev => !prev),
+    onLockAll: handleLockAll,
+    onUnlockAll: handleUnlockAll,
+    onUndo: handleUndo,
+    onToggleAB: handleToggleAB,
+  });
 
   // Apply AI suggestion
   const handleApplySuggestion = (param: string, value: number) => {
@@ -478,6 +527,20 @@ const Index = () => {
               />
             </div>
 
+            {/* Collaborative Feedback */}
+            <CollaborativeFeedback
+              currentParams={getCurrentParams()}
+              onApplySuggestion={handleApplySuggestion}
+            />
+
+            {/* A/B Comparison Mode */}
+            <ABComparisonMode
+              currentParams={getCurrentParams()}
+              onApplyParams={handleRevertToHistory}
+              isEnabled={isABModeEnabled}
+              onToggle={handleToggleAB}
+            />
+
             {/* AI Co-Pilot Suggestions */}
             <AISuggestionsPanel
               currentParams={getCurrentParams()}
@@ -531,6 +594,9 @@ const Index = () => {
             <GlobalTelepathy />
           </aside>
         </main>
+
+        {/* Keyboard Shortcuts Hint */}
+        <KeyboardShortcutsHint />
 
         {/* Bottom - Playback */}
         <footer className="border-t border-border/30 bg-background/50 backdrop-blur-sm">
