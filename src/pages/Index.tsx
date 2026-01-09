@@ -1,13 +1,11 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Header } from "@/components/Header";
-import { MusicParameter } from "@/components/MusicParameter";
 import { ParticleVisualization } from "@/components/ParticleVisualization";
 import { LyricsInput } from "@/components/LyricsInput";
 import { GenreSelector } from "@/components/GenreSelector";
 import { GenerateButton } from "@/components/GenerateButton";
 import { GlobalTelepathy } from "@/components/GlobalTelepathy";
 import { PlaybackControls } from "@/components/PlaybackControls";
-import { InstrumentPanel } from "@/components/InstrumentPanel";
 import { UniverseBackground } from "@/components/UniverseBackground";
 import { VolumeControls } from "@/components/VolumeControls";
 import { RecordingControls } from "@/components/RecordingControls";
@@ -15,6 +13,10 @@ import { Equalizer } from "@/components/Equalizer";
 import { WaveformVisualizer } from "@/components/WaveformVisualizer";
 import { PresetManager } from "@/components/PresetManager";
 import { AIPromptInput } from "@/components/AIPromptInput";
+import { LockableMusicParameter } from "@/components/LockableMusicParameter";
+import { LockableInstrumentPanel } from "@/components/LockableInstrumentPanel";
+import { AISuggestionsPanel } from "@/components/AISuggestionsPanel";
+import { ParameterHistory, HistoryEntry } from "@/components/ParameterHistory";
 import { useAudioEngine } from "@/hooks/useAudioEngine";
 import { toast } from "sonner";
 
@@ -35,6 +37,13 @@ const Index = () => {
   const [recordingTime, setRecordingTime] = useState(0);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [activePanel, setActivePanel] = useState<"left" | "right">("right");
+
+  // Lock state for producer control
+  const [lockedParams, setLockedParams] = useState<Set<string>>(new Set());
+
+  // History tracking
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const lastSavedParams = useRef<string>("");
 
   const { 
     playHarmony, 
@@ -59,6 +68,51 @@ const Index = () => {
   } = useAudioEngine();
 
   const [analyser, setAnalyser] = useState<AnalyserNode | null>(null);
+
+  // Get current params object
+  const getCurrentParams = useCallback(() => ({
+    harmony,
+    rhythm,
+    texture,
+    atmosphere,
+    piano,
+    drums,
+    bass,
+    synth,
+  }), [harmony, rhythm, texture, atmosphere, piano, drums, bass, synth]);
+
+  // Save to history when params change significantly
+  useEffect(() => {
+    const currentParamsStr = JSON.stringify(getCurrentParams());
+    if (currentParamsStr !== lastSavedParams.current) {
+      const timeoutId = setTimeout(() => {
+        // Only save if actually changed
+        if (currentParamsStr !== lastSavedParams.current) {
+          const newEntry: HistoryEntry = {
+            id: `history-${Date.now()}`,
+            timestamp: new Date(),
+            params: getCurrentParams(),
+            label: generateHistoryLabel(),
+          };
+          setHistory(prev => [newEntry, ...prev].slice(0, 20)); // Keep last 20
+          lastSavedParams.current = currentParamsStr;
+        }
+      }, 2000); // Debounce 2 seconds
+
+      return () => clearTimeout(timeoutId);
+    }
+  }, [getCurrentParams]);
+
+  const generateHistoryLabel = () => {
+    const labels = [
+      "Mix adjustment",
+      "Parameter tweak",
+      "Sound change",
+      "Level update",
+      "Tone shift",
+    ];
+    return labels[Math.floor(Math.random() * labels.length)];
+  };
 
   // Get analyser when playing starts
   useEffect(() => {
@@ -99,6 +153,51 @@ const Index = () => {
     }
   }, [isPlaying, rhythm, harmony, texture, atmosphere, piano, drums, bass, synth, startPlayback, stopPlayback, lyrics, selectedGenre]);
 
+  // Toggle lock for a parameter
+  const handleToggleLock = (param: string) => {
+    setLockedParams(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(param)) {
+        newSet.delete(param);
+        toast.info(`${param.toUpperCase()} unlocked`);
+      } else {
+        newSet.add(param);
+        toast.info(`${param.toUpperCase()} locked`, {
+          description: "AI suggestions won't affect this parameter",
+        });
+      }
+      return newSet;
+    });
+  };
+
+  // Apply AI suggestion
+  const handleApplySuggestion = (param: string, value: number) => {
+    if (lockedParams.has(param)) return;
+    
+    switch (param) {
+      case "harmony": setHarmony(value); break;
+      case "rhythm": setRhythm(value); break;
+      case "texture": setTexture(value); break;
+      case "atmosphere": setAtmosphere(value); break;
+      case "piano": setPiano(value); break;
+      case "drums": setDrums(value); break;
+      case "bass": setBass(value); break;
+      case "synth": setSynth(value); break;
+    }
+  };
+
+  // Revert to history entry
+  const handleRevertToHistory = (params: HistoryEntry["params"]) => {
+    setHarmony(params.harmony);
+    setRhythm(params.rhythm);
+    setTexture(params.texture);
+    setAtmosphere(params.atmosphere);
+    setPiano(params.piano);
+    setDrums(params.drums);
+    setBass(params.bass);
+    setSynth(params.synth);
+  };
+
   const handleGenerate = () => {
     if (!lyrics.trim()) {
       toast.warning("Please enter lyrics first", {
@@ -115,13 +214,14 @@ const Index = () => {
     const generatedParams = generateFromLyrics(lyrics, selectedGenre);
     
     setTimeout(() => {
-      setHarmony(generatedParams.harmony);
-      setAtmosphere(generatedParams.atmosphere);
-      setPiano(generatedParams.piano);
-      setSynth(generatedParams.synth);
-      setDrums(generatedParams.drums);
-      setBass(generatedParams.bass);
-      setTexture(generatedParams.texture);
+      // Respect locked parameters
+      if (!lockedParams.has("harmony")) setHarmony(generatedParams.harmony);
+      if (!lockedParams.has("atmosphere")) setAtmosphere(generatedParams.atmosphere);
+      if (!lockedParams.has("piano")) setPiano(generatedParams.piano);
+      if (!lockedParams.has("synth")) setSynth(generatedParams.synth);
+      if (!lockedParams.has("drums")) setDrums(generatedParams.drums);
+      if (!lockedParams.has("bass")) setBass(generatedParams.bass);
+      if (!lockedParams.has("texture")) setTexture(generatedParams.texture);
       
       setIsGenerating(false);
       setIsPlaying(true);
@@ -142,14 +242,15 @@ const Index = () => {
     synth: number;
     genre: string;
   }) => {
-    setHarmony(params.harmony);
-    setRhythm(params.rhythm);
-    setTexture(params.texture);
-    setAtmosphere(params.atmosphere);
-    setPiano(params.piano);
-    setDrums(params.drums);
-    setBass(params.bass);
-    setSynth(params.synth);
+    // Respect locked parameters
+    if (!lockedParams.has("harmony")) setHarmony(params.harmony);
+    if (!lockedParams.has("rhythm")) setRhythm(params.rhythm);
+    if (!lockedParams.has("texture")) setTexture(params.texture);
+    if (!lockedParams.has("atmosphere")) setAtmosphere(params.atmosphere);
+    if (!lockedParams.has("piano")) setPiano(params.piano);
+    if (!lockedParams.has("drums")) setDrums(params.drums);
+    if (!lockedParams.has("bass")) setBass(params.bass);
+    if (!lockedParams.has("synth")) setSynth(params.synth);
     setSelectedGenre(params.genre);
     setIsPlaying(true);
   };
@@ -165,14 +266,15 @@ const Index = () => {
     synth: number;
     genre: string;
   }) => {
-    setHarmony(params.harmony);
-    setRhythm(params.rhythm);
-    setTexture(params.texture);
-    setAtmosphere(params.atmosphere);
-    setPiano(params.piano);
-    setDrums(params.drums);
-    setBass(params.bass);
-    setSynth(params.synth);
+    // Respect locked parameters when loading presets
+    if (!lockedParams.has("harmony")) setHarmony(params.harmony);
+    if (!lockedParams.has("rhythm")) setRhythm(params.rhythm);
+    if (!lockedParams.has("texture")) setTexture(params.texture);
+    if (!lockedParams.has("atmosphere")) setAtmosphere(params.atmosphere);
+    if (!lockedParams.has("piano")) setPiano(params.piano);
+    if (!lockedParams.has("drums")) setDrums(params.drums);
+    if (!lockedParams.has("bass")) setBass(params.bass);
+    if (!lockedParams.has("synth")) setSynth(params.synth);
     setSelectedGenre(params.genre);
   };
 
@@ -212,8 +314,12 @@ const Index = () => {
   };
 
   const handleBpmChange = (bpm: number) => {
-    setRhythm(bpm);
-    toast.info(`Speed: ${bpm} BPM`);
+    if (!lockedParams.has("rhythm")) {
+      setRhythm(bpm);
+      toast.info(`Speed: ${bpm} BPM`);
+    } else {
+      toast.warning("BPM is locked");
+    }
   };
 
   return (
@@ -249,15 +355,18 @@ const Index = () => {
             w-full lg:w-72 xl:w-80 p-2 sm:p-4 space-y-2 sm:space-y-4 overflow-y-auto 
             border-r border-border/30 bg-background/30 backdrop-blur-sm flex-col
           `}>
-            <MusicParameter
+            <LockableMusicParameter
               label="HARMONY"
               sublabel="Chord tension"
               value={harmony}
               onChange={setHarmony}
               onInteract={playHarmony}
               variant="primary"
+              isLocked={lockedParams.has("harmony")}
+              onToggleLock={() => handleToggleLock("harmony")}
+              paramKey="harmony"
             />
-            <MusicParameter
+            <LockableMusicParameter
               label="RHYTHM"
               sublabel="Tempo & sync"
               value={rhythm}
@@ -267,22 +376,31 @@ const Index = () => {
               max={180}
               unit=" BPM"
               variant="accent"
+              isLocked={lockedParams.has("rhythm")}
+              onToggleLock={() => handleToggleLock("rhythm")}
+              paramKey="rhythm"
             />
-            <MusicParameter
+            <LockableMusicParameter
               label="TEXTURE"
               sublabel="Acoustic ↔ Digital"
               value={texture}
               onChange={setTexture}
               onInteract={playTexture}
               variant="primary"
+              isLocked={lockedParams.has("texture")}
+              onToggleLock={() => handleToggleLock("texture")}
+              paramKey="texture"
             />
-            <MusicParameter
+            <LockableMusicParameter
               label="ATMOSPHERE"
               sublabel="Reverb & Delay"
               value={atmosphere}
               onChange={setAtmosphere}
               onInteract={playAtmosphere}
               variant="primary"
+              isLocked={lockedParams.has("atmosphere")}
+              onToggleLock={() => handleToggleLock("atmosphere")}
+              paramKey="atmosphere"
             />
             <VolumeControls 
               volumes={volumes} 
@@ -291,6 +409,14 @@ const Index = () => {
             <PresetManager
               currentParams={{ harmony, rhythm, texture, atmosphere, piano, drums, bass, synth, genre: selectedGenre }}
               onLoadPreset={handleLoadPreset}
+            />
+            
+            {/* History Panel */}
+            <ParameterHistory
+              currentParams={getCurrentParams()}
+              history={history}
+              onRevert={handleRevertToHistory}
+              onPreview={handleRevertToHistory}
             />
           </aside>
 
@@ -352,9 +478,17 @@ const Index = () => {
               />
             </div>
 
+            {/* AI Co-Pilot Suggestions */}
+            <AISuggestionsPanel
+              currentParams={getCurrentParams()}
+              lockedParams={lockedParams}
+              onApplySuggestion={handleApplySuggestion}
+              isPlaying={isPlaying}
+            />
+
             <AIPromptInput onGenerate={handleAIPromptGenerate} />
 
-            <InstrumentPanel
+            <LockableInstrumentPanel
               piano={piano}
               drums={drums}
               bass={bass}
@@ -367,6 +501,8 @@ const Index = () => {
               onDrumsInteract={playDrums}
               onBassInteract={playBass}
               onSynthInteract={playSynth}
+              lockedParams={lockedParams}
+              onToggleLock={handleToggleLock}
             />
 
             <RecordingControls
