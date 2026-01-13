@@ -1,139 +1,71 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Header } from "@/components/Header";
-import { ParticleVisualization } from "@/components/ParticleVisualization";
-import { LyricsInput } from "@/components/LyricsInput";
-import { GenreSelector } from "@/components/GenreSelector";
-import { GenerateButton } from "@/components/GenerateButton";
-import { GlobalTelepathy } from "@/components/GlobalTelepathy";
-import { PlaybackControls } from "@/components/PlaybackControls";
 import { UniverseBackground } from "@/components/UniverseBackground";
-import { VolumeControls } from "@/components/VolumeControls";
-import { RecordingControls } from "@/components/RecordingControls";
-import { Equalizer } from "@/components/Equalizer";
-import { WaveformVisualizer } from "@/components/WaveformVisualizer";
-import { PresetManager } from "@/components/PresetManager";
-import { AIPromptInput } from "@/components/AIPromptInput";
-import { LockableMusicParameter } from "@/components/LockableMusicParameter";
-import { LockableInstrumentPanel } from "@/components/LockableInstrumentPanel";
-import { AISuggestionsPanel } from "@/components/AISuggestionsPanel";
-import { ParameterHistory, HistoryEntry } from "@/components/ParameterHistory";
-import { CollaborativeFeedback } from "@/components/CollaborativeFeedback";
-import { ABComparisonMode } from "@/components/ABComparisonMode";
+import { PlaybackControls } from "@/components/PlaybackControls";
 import { KeyboardShortcutsHint } from "@/components/KeyboardShortcutsHint";
-import { useAudioEngine } from "@/hooks/useAudioEngine";
+import { ClipSubmission, AudioClip } from "@/components/ClipSubmission";
+import { VotingSystem } from "@/components/VotingSystem";
+import { SessionTimeline } from "@/components/SessionTimeline";
+import { AIDJPanel } from "@/components/AIDJPanel";
+import { CrowdParticipants } from "@/components/CrowdParticipants";
+import { GenreSelector } from "@/components/GenreSelector";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
+import { useAudioEngine } from "@/hooks/useAudioEngine";
 import { toast } from "sonner";
+import { Crown, Mic, Share2, Settings, Music, Layers, Users } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+
+interface SessionSection {
+  id: string;
+  name: string;
+  bars: number;
+  isActive: boolean;
+  isLocked: boolean;
+  clips: AudioClip[];
+}
+
+const initialSections: SessionSection[] = [
+  { id: "intro", name: "Intro", bars: 8, isActive: true, isLocked: false, clips: [] },
+  { id: "verse1", name: "Verse", bars: 16, isActive: false, isLocked: false, clips: [] },
+  { id: "chorus1", name: "Chorus", bars: 16, isActive: false, isLocked: false, clips: [] },
+  { id: "verse2", name: "Verse", bars: 16, isActive: false, isLocked: false, clips: [] },
+  { id: "chorus2", name: "Chorus", bars: 16, isActive: false, isLocked: false, clips: [] },
+  { id: "bridge", name: "Bridge", bars: 8, isActive: false, isLocked: false, clips: [] },
+  { id: "outro", name: "Outro", bars: 8, isActive: false, isLocked: false, clips: [] },
+];
 
 const Index = () => {
-  const [harmony, setHarmony] = useState(20);
-  const [rhythm, setRhythm] = useState(110);
-  const [texture, setTexture] = useState(12);
-  const [atmosphere, setAtmosphere] = useState(40);
-  const [piano, setPiano] = useState(50);
-  const [drums, setDrums] = useState(60);
-  const [bass, setBass] = useState(45);
-  const [synth, setSynth] = useState(55);
-  const [lyrics, setLyrics] = useState("");
-  const [selectedGenre, setSelectedGenre] = useState("groove");
+  // Producer mode - in real app this would be from auth
+  const [isProducer] = useState(true);
+  
+  // Session state
+  const [sessionId] = useState("session-demo-001");
+  const [sessionName] = useState("Crowd Banger #1");
+  const [sections, setSections] = useState<SessionSection[]>(initialSections);
+  const [currentSection, setCurrentSection] = useState("intro");
+  const [clips, setClips] = useState<AudioClip[]>([]);
+  
+  // Voting state
+  const [votingTimeLeft, setVotingTimeLeft] = useState(120);
+  
+  // Playback state
   const [isPlaying, setIsPlaying] = useState(false);
-  const [isGenerating, setIsGenerating] = useState(false);
+  const [playheadPosition, setPlayheadPosition] = useState(0);
   const [currentTime, setCurrentTime] = useState("00:00:00");
-  const [recordingTime, setRecordingTime] = useState(0);
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [activePanel, setActivePanel] = useState<"left" | "right">("right");
+  
+  // Audio parameters
+  const [selectedGenre, setSelectedGenre] = useState("groove");
+  const [bpm, setBpm] = useState(120);
+  
+  // Mobile panel state
+  const [activeTab, setActiveTab] = useState("submit");
+  
+  const { playGenreSound, startPlayback, stopPlayback } = useAudioEngine();
+  
+  const musicIntensity = clips.length * 10 + bpm / 2;
 
-  // Lock state for producer control
-  const [lockedParams, setLockedParams] = useState<Set<string>>(new Set());
-
-  // History tracking
-  const [history, setHistory] = useState<HistoryEntry[]>([]);
-  const lastSavedParams = useRef<string>("");
-
-  // A/B Comparison mode
-  const [isABModeEnabled, setIsABModeEnabled] = useState(false);
-
-  // All parameter keys for lock/unlock all
-  const allParamKeys = ["harmony", "rhythm", "texture", "atmosphere", "piano", "drums", "bass", "synth"];
-
-  const { 
-    playHarmony, 
-    playRhythm, 
-    playTexture, 
-    playAtmosphere, 
-    playGenreSound,
-    playPiano,
-    playDrums,
-    playBass,
-    playSynth,
-    startPlayback,
-    stopPlayback,
-    isRecording,
-    startRecording,
-    stopRecording,
-    exportRecording,
-    volumes,
-    updateVolume,
-    generateFromLyrics,
-    getAnalyser,
-  } = useAudioEngine();
-
-  const [analyser, setAnalyser] = useState<AnalyserNode | null>(null);
-
-  // Get current params object
-  const getCurrentParams = useCallback(() => ({
-    harmony,
-    rhythm,
-    texture,
-    atmosphere,
-    piano,
-    drums,
-    bass,
-    synth,
-  }), [harmony, rhythm, texture, atmosphere, piano, drums, bass, synth]);
-
-  // Save to history when params change significantly
-  useEffect(() => {
-    const currentParamsStr = JSON.stringify(getCurrentParams());
-    if (currentParamsStr !== lastSavedParams.current) {
-      const timeoutId = setTimeout(() => {
-        // Only save if actually changed
-        if (currentParamsStr !== lastSavedParams.current) {
-          const newEntry: HistoryEntry = {
-            id: `history-${Date.now()}`,
-            timestamp: new Date(),
-            params: getCurrentParams(),
-            label: generateHistoryLabel(),
-          };
-          setHistory(prev => [newEntry, ...prev].slice(0, 20)); // Keep last 20
-          lastSavedParams.current = currentParamsStr;
-        }
-      }, 2000); // Debounce 2 seconds
-
-      return () => clearTimeout(timeoutId);
-    }
-  }, [getCurrentParams]);
-
-  const generateHistoryLabel = () => {
-    const labels = [
-      "Mix adjustment",
-      "Parameter tweak",
-      "Sound change",
-      "Level update",
-      "Tone shift",
-    ];
-    return labels[Math.floor(Math.random() * labels.length)];
-  };
-
-  // Get analyser when playing starts
-  useEffect(() => {
-    if (isPlaying) {
-      const analyserNode = getAnalyser();
-      setAnalyser(analyserNode);
-    }
-  }, [isPlaying, getAnalyser]);
-
-  const musicIntensity = (harmony + rhythm / 2 + texture + atmosphere + piano + drums + bass + synth) / 8;
-
+  // Clock
   useEffect(() => {
     const interval = setInterval(() => {
       const now = new Date();
@@ -144,231 +76,199 @@ const Index = () => {
     return () => clearInterval(interval);
   }, []);
 
+  // Voting countdown
   useEffect(() => {
-    let interval: NodeJS.Timeout;
-    if (isRecording) {
-      setRecordingTime(0);
-      interval = setInterval(() => {
-        setRecordingTime(prev => prev + 1);
-      }, 1000);
+    if (votingTimeLeft <= 0) {
+      // Auto-process votes when time runs out
+      processVotingResults();
+      setVotingTimeLeft(120);
+      return;
     }
+    
+    const interval = setInterval(() => {
+      setVotingTimeLeft((prev) => prev - 1);
+    }, 1000);
+    
     return () => clearInterval(interval);
-  }, [isRecording]);
+  }, [votingTimeLeft]);
 
+  // Playhead animation
   useEffect(() => {
     if (isPlaying) {
-      startPlayback({ bpm: rhythm, harmony, texture, atmosphere, piano, drums, bass, synth, lyrics, genre: selectedGenre });
-    } else {
-      stopPlayback();
+      const interval = setInterval(() => {
+        setPlayheadPosition((prev) => (prev >= 100 ? 0 : prev + 0.5));
+      }, 100);
+      return () => clearInterval(interval);
     }
-  }, [isPlaying, rhythm, harmony, texture, atmosphere, piano, drums, bass, synth, startPlayback, stopPlayback, lyrics, selectedGenre]);
+  }, [isPlaying]);
 
-  // Toggle lock for a parameter
-  const handleToggleLock = (param: string) => {
-    setLockedParams(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(param)) {
-        newSet.delete(param);
-        toast.info(`${param.toUpperCase()} unlocked`);
-      } else {
-        newSet.add(param);
-        toast.info(`${param.toUpperCase()} locked`, {
-          description: "AI suggestions won't affect this parameter",
+  // Process voting results
+  const processVotingResults = () => {
+    const votingClips = clips.filter((c) => c.status === "voting");
+    votingClips.forEach((clip) => {
+      if (clip.votes.up > clip.votes.down) {
+        // Move to pending producer approval
+        setClips((prev) =>
+          prev.map((c) =>
+            c.id === clip.id ? { ...c, status: "pending" } : c
+          )
+        );
+        toast.info(`"${clip.name}" passed voting!`, {
+          description: "Waiting for producer approval",
         });
+      } else {
+        setClips((prev) =>
+          prev.map((c) =>
+            c.id === clip.id ? { ...c, status: "rejected" } : c
+          )
+        );
       }
-      return newSet;
     });
   };
 
-  // Lock all parameters
-  const handleLockAll = useCallback(() => {
-    setLockedParams(new Set(allParamKeys));
-    toast.success("All parameters locked", {
-      description: "AI and collaborator suggestions won't affect any parameter",
-    });
-  }, []);
-
-  // Unlock all parameters
-  const handleUnlockAll = useCallback(() => {
-    setLockedParams(new Set());
-    toast.success("All parameters unlocked");
-  }, []);
-
-  // Undo - revert to last history entry
-  const handleUndo = useCallback(() => {
-    if (history.length > 0) {
-      const lastEntry = history[0];
-      handleRevertToHistory(lastEntry.params);
-      toast.info("Undone to previous state");
-    } else {
-      toast.warning("No history to undo");
+  // Handle clip submission
+  const handleSubmitClip = (clip: AudioClip) => {
+    const newClip = {
+      ...clip,
+      status: isProducer ? "approved" : "voting",
+    } as AudioClip;
+    
+    setClips((prev) => [...prev, newClip]);
+    
+    if (newClip.status === "approved") {
+      // Add directly to current section
+      setSections((prev) =>
+        prev.map((s) =>
+          s.id === currentSection
+            ? { ...s, clips: [...s.clips, newClip] }
+            : s
+        )
+      );
     }
-  }, [history]);
+  };
 
-  // Toggle A/B mode
-  const handleToggleAB = useCallback(() => {
-    setIsABModeEnabled(prev => !prev);
-  }, []);
+  // Handle voting
+  const handleVote = (clipId: string, vote: "up" | "down") => {
+    setClips((prev) =>
+      prev.map((c) =>
+        c.id === clipId
+          ? {
+              ...c,
+              votes: {
+                up: c.votes.up + (vote === "up" ? 1 : 0),
+                down: c.votes.down + (vote === "down" ? 1 : 0),
+              },
+            }
+          : c
+      )
+    );
+  };
+
+  // Producer approval
+  const handleProducerApprove = (clipId: string) => {
+    const clip = clips.find((c) => c.id === clipId);
+    if (!clip) return;
+
+    setClips((prev) =>
+      prev.map((c) =>
+        c.id === clipId ? { ...c, status: "approved" } : c
+      )
+    );
+
+    // Add to current section
+    setSections((prev) =>
+      prev.map((s) =>
+        s.id === currentSection
+          ? { ...s, clips: [...s.clips, { ...clip, status: "approved" }] }
+          : s
+      )
+    );
+
+    toast.success(`Approved "${clip.name}"`, {
+      description: `Added to ${sections.find((s) => s.id === currentSection)?.name}`,
+    });
+  };
+
+  // Producer rejection
+  const handleProducerReject = (clipId: string) => {
+    const clip = clips.find((c) => c.id === clipId);
+    setClips((prev) =>
+      prev.map((c) =>
+        c.id === clipId ? { ...c, status: "rejected" } : c
+      )
+    );
+    toast.info(`Rejected "${clip?.name}"`);
+  };
+
+  // Section management
+  const handleSelectSection = (sectionId: string) => {
+    setCurrentSection(sectionId);
+    toast.info(`Working on: ${sections.find((s) => s.id === sectionId)?.name}`);
+  };
+
+  const handleAddSection = () => {
+    const sectionNames = ["Drop", "Breakdown", "Build", "Hook", "Verse", "Chorus"];
+    const randomName = sectionNames[Math.floor(Math.random() * sectionNames.length)];
+    const newSection: SessionSection = {
+      id: `section-${Date.now()}`,
+      name: randomName,
+      bars: 8,
+      isActive: false,
+      isLocked: false,
+      clips: [],
+    };
+    setSections((prev) => [...prev, newSection]);
+    toast.success(`Added ${randomName} section`);
+  };
+
+  const handleRemoveClip = (sectionId: string, clipId: string) => {
+    setSections((prev) =>
+      prev.map((s) =>
+        s.id === sectionId
+          ? { ...s, clips: s.clips.filter((c) => c.id !== clipId) }
+          : s
+      )
+    );
+    toast.info("Clip removed from section");
+  };
+
+  const handleToggleSectionLock = (sectionId: string) => {
+    setSections((prev) =>
+      prev.map((s) =>
+        s.id === sectionId ? { ...s, isLocked: !s.isLocked } : s
+      )
+    );
+  };
+
+  // AI suggestion handler
+  const handleAISuggestion = (suggestion: any) => {
+    if (suggestion.action?.clipId) {
+      handleProducerApprove(suggestion.action.clipId);
+    } else {
+      toast.info("AI suggestion noted", {
+        description: suggestion.title,
+      });
+    }
+  };
 
   // Keyboard shortcuts
   useKeyboardShortcuts({
-    onPlayPause: () => setIsPlaying(prev => !prev),
-    onLockAll: handleLockAll,
-    onUnlockAll: handleUnlockAll,
-    onUndo: handleUndo,
-    onToggleAB: handleToggleAB,
+    onPlayPause: () => setIsPlaying(!isPlaying),
+    onLockAll: () => {
+      setSections((prev) => prev.map((s) => ({ ...s, isLocked: true })));
+      toast.success("All sections locked");
+    },
+    onUnlockAll: () => {
+      setSections((prev) => prev.map((s) => ({ ...s, isLocked: false })));
+      toast.success("All sections unlocked");
+    },
+    onUndo: () => toast.info("Undo not available in this view"),
+    onToggleAB: () => toast.info("A/B mode coming soon"),
   });
 
-  // Apply AI suggestion
-  const handleApplySuggestion = (param: string, value: number) => {
-    if (lockedParams.has(param)) return;
-    
-    switch (param) {
-      case "harmony": setHarmony(value); break;
-      case "rhythm": setRhythm(value); break;
-      case "texture": setTexture(value); break;
-      case "atmosphere": setAtmosphere(value); break;
-      case "piano": setPiano(value); break;
-      case "drums": setDrums(value); break;
-      case "bass": setBass(value); break;
-      case "synth": setSynth(value); break;
-    }
-  };
-
-  // Revert to history entry
-  const handleRevertToHistory = (params: HistoryEntry["params"]) => {
-    setHarmony(params.harmony);
-    setRhythm(params.rhythm);
-    setTexture(params.texture);
-    setAtmosphere(params.atmosphere);
-    setPiano(params.piano);
-    setDrums(params.drums);
-    setBass(params.bass);
-    setSynth(params.synth);
-  };
-
-  const handleGenerate = () => {
-    if (!lyrics.trim()) {
-      toast.warning("Please enter lyrics first", {
-        description: "Write some lyrics to generate AI music",
-      });
-      return;
-    }
-
-    setIsGenerating(true);
-    toast.info("AI Processing...", {
-      description: "Analyzing your input and generating unique music",
-    });
-    
-    const generatedParams = generateFromLyrics(lyrics, selectedGenre);
-    
-    setTimeout(() => {
-      // Respect locked parameters
-      if (!lockedParams.has("harmony")) setHarmony(generatedParams.harmony);
-      if (!lockedParams.has("atmosphere")) setAtmosphere(generatedParams.atmosphere);
-      if (!lockedParams.has("piano")) setPiano(generatedParams.piano);
-      if (!lockedParams.has("synth")) setSynth(generatedParams.synth);
-      if (!lockedParams.has("drums")) setDrums(generatedParams.drums);
-      if (!lockedParams.has("bass")) setBass(generatedParams.bass);
-      if (!lockedParams.has("texture")) setTexture(generatedParams.texture);
-      
-      setIsGenerating(false);
-      setIsPlaying(true);
-      toast.success("AI Music Generated!", {
-        description: `${selectedGenre.toUpperCase()} at ${rhythm} BPM - Mood: ${generatedParams.harmony > 50 ? 'Upbeat' : 'Chill'}`,
-      });
-    }, 2500);
-  };
-
-  const handleAIPromptGenerate = (params: {
-    harmony: number;
-    rhythm: number;
-    texture: number;
-    atmosphere: number;
-    piano: number;
-    drums: number;
-    bass: number;
-    synth: number;
-    genre: string;
-  }) => {
-    // Respect locked parameters
-    if (!lockedParams.has("harmony")) setHarmony(params.harmony);
-    if (!lockedParams.has("rhythm")) setRhythm(params.rhythm);
-    if (!lockedParams.has("texture")) setTexture(params.texture);
-    if (!lockedParams.has("atmosphere")) setAtmosphere(params.atmosphere);
-    if (!lockedParams.has("piano")) setPiano(params.piano);
-    if (!lockedParams.has("drums")) setDrums(params.drums);
-    if (!lockedParams.has("bass")) setBass(params.bass);
-    if (!lockedParams.has("synth")) setSynth(params.synth);
-    setSelectedGenre(params.genre);
-    setIsPlaying(true);
-  };
-
-  const handleLoadPreset = (params: {
-    harmony: number;
-    rhythm: number;
-    texture: number;
-    atmosphere: number;
-    piano: number;
-    drums: number;
-    bass: number;
-    synth: number;
-    genre: string;
-  }) => {
-    // Respect locked parameters when loading presets
-    if (!lockedParams.has("harmony")) setHarmony(params.harmony);
-    if (!lockedParams.has("rhythm")) setRhythm(params.rhythm);
-    if (!lockedParams.has("texture")) setTexture(params.texture);
-    if (!lockedParams.has("atmosphere")) setAtmosphere(params.atmosphere);
-    if (!lockedParams.has("piano")) setPiano(params.piano);
-    if (!lockedParams.has("drums")) setDrums(params.drums);
-    if (!lockedParams.has("bass")) setBass(params.bass);
-    if (!lockedParams.has("synth")) setSynth(params.synth);
-    setSelectedGenre(params.genre);
-  };
-
-  const handleVocalizeOnly = () => {
-    if (!lyrics.trim()) {
-      toast.warning("Please enter lyrics first");
-      return;
-    }
-    toast.info("Vocalization Mode", {
-      description: "Generating vocals...",
-    });
-  };
-
-  const handleStartRecording = () => {
-    if (!isPlaying) {
-      toast.warning("Start playing music first");
-      return;
-    }
-    startRecording();
-    toast.info("Recording Started");
-  };
-
-  const handleStopRecording = async () => {
-    await stopRecording();
-    toast.success("Recording Stopped", {
-      description: `Recorded ${recordingTime} seconds`,
-    });
-  };
-
-  const handleExport = async (format: 'wav' | 'mp3' = 'wav') => {
-    const blob = await exportRecording(format);
-    if (blob) {
-      toast.success(`Track Exported as ${format.toUpperCase()}!`);
-    } else {
-      toast.warning("No recording to export");
-    }
-  };
-
-  const handleBpmChange = (bpm: number) => {
-    if (!lockedParams.has("rhythm")) {
-      setRhythm(bpm);
-      toast.info(`Speed: ${bpm} BPM`);
-    } else {
-      toast.warning("BPM is locked");
-    }
+  const handleBpmChange = (newBpm: number) => {
+    setBpm(newBpm);
+    toast.info(`Tempo: ${newBpm} BPM`);
   };
 
   return (
@@ -376,234 +276,202 @@ const Index = () => {
       <UniverseBackground isPlaying={isPlaying} intensity={musicIntensity} />
       
       <div className="relative z-10 flex flex-col h-screen">
-        <Header 
-          onMenuToggle={() => setIsMobileMenuOpen(!isMobileMenuOpen)} 
-          isMenuOpen={isMobileMenuOpen} 
-        />
-        
-        {/* Mobile Panel Toggle */}
-        <div className="lg:hidden flex border-b border-border/30 bg-background/50 backdrop-blur-sm">
-          <button
-            onClick={() => setActivePanel("left")}
-            className={`flex-1 py-2 text-xs font-display ${activePanel === "left" ? "text-ai-purple border-b-2 border-ai-purple" : "text-muted-foreground"}`}
-          >
-            PARAMETERS
-          </button>
-          <button
-            onClick={() => setActivePanel("right")}
-            className={`flex-1 py-2 text-xs font-display ${activePanel === "right" ? "text-ai-pink border-b-2 border-ai-pink" : "text-muted-foreground"}`}
-          >
-            CONTROLS
-          </button>
+        {/* Header */}
+        <header className="border-b border-border/30 bg-background/50 backdrop-blur-sm px-4 py-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                <Music className="w-6 h-6 text-ai-purple" />
+                <span className="font-display text-lg font-bold ai-gradient-text hidden sm:inline">
+                  CROWD STUDIO
+                </span>
+              </div>
+              <div className="h-6 w-px bg-border/50 hidden sm:block" />
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-display text-foreground">{sessionName}</span>
+                {isProducer && (
+                  <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-ai-gold/20 text-ai-gold border border-ai-gold/30">
+                    <Crown className="w-3 h-3" />
+                    PRODUCER
+                  </span>
+                )}
+              </div>
+            </div>
+            
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" size="sm" className="hidden sm:flex gap-1 text-xs">
+                <Share2 className="w-4 h-4" />
+                Invite
+              </Button>
+              <Button variant="ghost" size="sm" className="gap-1 text-xs">
+                <Settings className="w-4 h-4" />
+                <span className="hidden sm:inline">Settings</span>
+              </Button>
+            </div>
+          </div>
+        </header>
+
+        {/* Mobile Tabs */}
+        <div className="lg:hidden border-b border-border/30 bg-background/50">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+            <TabsList className="w-full justify-start rounded-none bg-transparent border-0 h-10 px-2">
+              <TabsTrigger value="submit" className="flex-1 text-xs gap-1 data-[state=active]:text-ai-cyan data-[state=active]:border-b-2 data-[state=active]:border-ai-cyan rounded-none">
+                <Mic className="w-3 h-3" />
+                Submit
+              </TabsTrigger>
+              <TabsTrigger value="vote" className="flex-1 text-xs gap-1 data-[state=active]:text-ai-gold data-[state=active]:border-b-2 data-[state=active]:border-ai-gold rounded-none">
+                <Users className="w-3 h-3" />
+                Vote
+              </TabsTrigger>
+              <TabsTrigger value="timeline" className="flex-1 text-xs gap-1 data-[state=active]:text-ai-purple data-[state=active]:border-b-2 data-[state=active]:border-ai-purple rounded-none">
+                <Layers className="w-3 h-3" />
+                Timeline
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
         </div>
 
+        {/* Main Content */}
         <main className="flex-1 flex overflow-hidden">
-          {/* Left Panel - Parameters */}
-          <aside className={`
-            ${activePanel === "left" ? "flex" : "hidden"} lg:flex
-            w-full lg:w-72 xl:w-80 p-2 sm:p-4 space-y-2 sm:space-y-4 overflow-y-auto 
-            border-r border-border/30 bg-background/30 backdrop-blur-sm flex-col
-          `}>
-            <LockableMusicParameter
-              label="HARMONY"
-              sublabel="Chord tension"
-              value={harmony}
-              onChange={setHarmony}
-              onInteract={playHarmony}
-              variant="primary"
-              isLocked={lockedParams.has("harmony")}
-              onToggleLock={() => handleToggleLock("harmony")}
-              paramKey="harmony"
-            />
-            <LockableMusicParameter
-              label="RHYTHM"
-              sublabel="Tempo & sync"
-              value={rhythm}
-              onChange={setRhythm}
-              onInteract={playRhythm}
-              min={60}
-              max={180}
-              unit=" BPM"
-              variant="accent"
-              isLocked={lockedParams.has("rhythm")}
-              onToggleLock={() => handleToggleLock("rhythm")}
-              paramKey="rhythm"
-            />
-            <LockableMusicParameter
-              label="TEXTURE"
-              sublabel="Acoustic ↔ Digital"
-              value={texture}
-              onChange={setTexture}
-              onInteract={playTexture}
-              variant="primary"
-              isLocked={lockedParams.has("texture")}
-              onToggleLock={() => handleToggleLock("texture")}
-              paramKey="texture"
-            />
-            <LockableMusicParameter
-              label="ATMOSPHERE"
-              sublabel="Reverb & Delay"
-              value={atmosphere}
-              onChange={setAtmosphere}
-              onInteract={playAtmosphere}
-              variant="primary"
-              isLocked={lockedParams.has("atmosphere")}
-              onToggleLock={() => handleToggleLock("atmosphere")}
-              paramKey="atmosphere"
-            />
-            <VolumeControls 
-              volumes={volumes} 
-              onVolumeChange={updateVolume} 
-            />
-            <PresetManager
-              currentParams={{ harmony, rhythm, texture, atmosphere, piano, drums, bass, synth, genre: selectedGenre }}
-              onLoadPreset={handleLoadPreset}
+          {/* Left Panel - Submit & Vote */}
+          <aside className="hidden lg:flex w-80 xl:w-96 p-4 space-y-4 overflow-y-auto border-r border-border/30 bg-background/30 backdrop-blur-sm flex-col">
+            <ClipSubmission
+              onSubmitClip={handleSubmitClip}
+              sessionSection={sections.find((s) => s.id === currentSection)?.name || "Intro"}
+              isProducer={isProducer}
             />
             
-            {/* History Panel */}
-            <ParameterHistory
-              currentParams={getCurrentParams()}
-              history={history}
-              onRevert={handleRevertToHistory}
-              onPreview={handleRevertToHistory}
+            <VotingSystem
+              clips={clips}
+              onVote={handleVote}
+              onProducerApprove={handleProducerApprove}
+              onProducerReject={handleProducerReject}
+              isProducer={isProducer}
+              votingTimeLeft={votingTimeLeft}
             />
           </aside>
 
-          {/* Center - Visualization (hidden on mobile, shown on larger screens) */}
-          <section className="hidden lg:flex flex-1 p-2 sm:p-4 relative flex-col gap-2 sm:gap-4">
-            <ParticleVisualization
-              isPlaying={isPlaying}
-              bpm={rhythm}
-              harmony={harmony}
-              rhythm={rhythm}
-              texture={texture}
-              atmosphere={atmosphere}
-            />
-            <WaveformVisualizer
-              isPlaying={isPlaying}
-              analyser={analyser}
-              piano={piano}
-              drums={drums}
-              bass={bass}
-              synth={synth}
-            />
-            <Equalizer
-              isPlaying={isPlaying}
-              analyser={analyser}
-              piano={piano}
-              drums={drums}
-              bass={bass}
-              synth={synth}
-              harmony={harmony}
-              rhythm={rhythm}
-            />
-          </section>
-
-          {/* Right Panel - Controls */}
-          <aside className={`
-            ${activePanel === "right" ? "flex" : "hidden"} lg:flex
-            w-full lg:w-80 xl:w-96 p-2 sm:p-4 space-y-2 sm:space-y-4 overflow-y-auto 
-            border-l border-border/30 bg-background/30 backdrop-blur-sm flex-col
-          `}>
-            {/* Mobile-only visualizations */}
-            <div className="lg:hidden space-y-2">
-              <Equalizer
+          {/* Center - Timeline & Visualization */}
+          <section className="flex-1 p-4 flex flex-col gap-4 overflow-y-auto">
+            {/* Desktop Timeline */}
+            <div className="hidden lg:block">
+              <SessionTimeline
+                sections={sections}
+                currentSection={currentSection}
+                onSelectSection={handleSelectSection}
+                onAddSection={handleAddSection}
+                onRemoveClip={handleRemoveClip}
+                onToggleLock={handleToggleSectionLock}
                 isPlaying={isPlaying}
-                analyser={analyser}
-                piano={piano}
-                drums={drums}
-                bass={bass}
-                synth={synth}
-                harmony={harmony}
-                rhythm={rhythm}
-              />
-              <WaveformVisualizer
-                isPlaying={isPlaying}
-                analyser={analyser}
-                piano={piano}
-                drums={drums}
-                bass={bass}
-                synth={synth}
+                playheadPosition={playheadPosition}
+                isProducer={isProducer}
               />
             </div>
 
-            {/* Collaborative Feedback */}
-            <CollaborativeFeedback
-              currentParams={getCurrentParams()}
-              onApplySuggestion={handleApplySuggestion}
+            {/* Mobile Content */}
+            <div className="lg:hidden">
+              <Tabs value={activeTab} className="w-full">
+                <TabsContent value="submit" className="mt-0 space-y-4">
+                  <ClipSubmission
+                    onSubmitClip={handleSubmitClip}
+                    sessionSection={sections.find((s) => s.id === currentSection)?.name || "Intro"}
+                    isProducer={isProducer}
+                  />
+                </TabsContent>
+                <TabsContent value="vote" className="mt-0 space-y-4">
+                  <VotingSystem
+                    clips={clips}
+                    onVote={handleVote}
+                    onProducerApprove={handleProducerApprove}
+                    onProducerReject={handleProducerReject}
+                    isProducer={isProducer}
+                    votingTimeLeft={votingTimeLeft}
+                  />
+                  <CrowdParticipants sessionId={sessionId} isProducer={isProducer} />
+                </TabsContent>
+                <TabsContent value="timeline" className="mt-0">
+                  <SessionTimeline
+                    sections={sections}
+                    currentSection={currentSection}
+                    onSelectSection={handleSelectSection}
+                    onAddSection={handleAddSection}
+                    onRemoveClip={handleRemoveClip}
+                    onToggleLock={handleToggleSectionLock}
+                    isPlaying={isPlaying}
+                    playheadPosition={playheadPosition}
+                    isProducer={isProducer}
+                  />
+                </TabsContent>
+              </Tabs>
+            </div>
+
+            {/* Genre Selector - Desktop */}
+            <div className="hidden lg:block">
+              <GenreSelector
+                selectedGenre={selectedGenre}
+                onSelect={setSelectedGenre}
+                onPlaySound={playGenreSound}
+                onBpmChange={handleBpmChange}
+              />
+            </div>
+
+            {/* Session Stats */}
+            <div className="glass-panel p-4">
+              <div className="grid grid-cols-4 gap-4 text-center">
+                <div>
+                  <p className="text-2xl font-display text-ai-purple">{sections.reduce((acc, s) => acc + s.clips.length, 0)}</p>
+                  <p className="text-[10px] text-muted-foreground">Clips Added</p>
+                </div>
+                <div>
+                  <p className="text-2xl font-display text-ai-gold">{clips.filter((c) => c.status === "voting" || c.status === "pending").length}</p>
+                  <p className="text-[10px] text-muted-foreground">Pending</p>
+                </div>
+                <div>
+                  <p className="text-2xl font-display text-ai-cyan">{bpm}</p>
+                  <p className="text-[10px] text-muted-foreground">BPM</p>
+                </div>
+                <div>
+                  <p className="text-2xl font-display text-ai-pink">{sections.reduce((acc, s) => acc + s.bars, 0)}</p>
+                  <p className="text-[10px] text-muted-foreground">Total Bars</p>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* Right Panel - AI & Participants */}
+          <aside className="hidden lg:flex w-80 xl:w-96 p-4 space-y-4 overflow-y-auto border-l border-border/30 bg-background/30 backdrop-blur-sm flex-col">
+            <AIDJPanel
+              clips={clips}
+              currentSection={currentSection}
+              genre={selectedGenre}
+              bpm={bpm}
+              onApplySuggestion={handleAISuggestion}
+              isProducer={isProducer}
             />
-
-            {/* A/B Comparison Mode */}
-            <ABComparisonMode
-              currentParams={getCurrentParams()}
-              onApplyParams={handleRevertToHistory}
-              isEnabled={isABModeEnabled}
-              onToggle={handleToggleAB}
-            />
-
-            {/* AI Co-Pilot Suggestions */}
-            <AISuggestionsPanel
-              currentParams={getCurrentParams()}
-              lockedParams={lockedParams}
-              onApplySuggestion={handleApplySuggestion}
-              isPlaying={isPlaying}
-            />
-
-            <AIPromptInput onGenerate={handleAIPromptGenerate} />
-
-            <LockableInstrumentPanel
-              piano={piano}
-              drums={drums}
-              bass={bass}
-              synth={synth}
-              onPianoChange={setPiano}
-              onDrumsChange={setDrums}
-              onBassChange={setBass}
-              onSynthChange={setSynth}
-              onPianoInteract={playPiano}
-              onDrumsInteract={playDrums}
-              onBassInteract={playBass}
-              onSynthInteract={playSynth}
-              lockedParams={lockedParams}
-              onToggleLock={handleToggleLock}
-            />
-
-            <RecordingControls
-              isRecording={isRecording}
-              isPlaying={isPlaying}
-              onStartRecording={handleStartRecording}
-              onStopRecording={handleStopRecording}
-              onExport={handleExport}
-            />
-
-            <LyricsInput value={lyrics} onChange={setLyrics} />
             
-            <GenerateButton
-              onGenerate={handleGenerate}
-              onVocalizeOnly={handleVocalizeOnly}
-              isGenerating={isGenerating}
-            />
-
-            <GenreSelector
-              selectedGenre={selectedGenre}
-              onSelect={setSelectedGenre}
-              onPlaySound={playGenreSound}
-              onBpmChange={handleBpmChange}
-            />
-
-            <GlobalTelepathy />
+            <CrowdParticipants sessionId={sessionId} isProducer={isProducer} />
+            
+            {/* Mobile Genre Selector */}
+            <div className="lg:hidden">
+              <GenreSelector
+                selectedGenre={selectedGenre}
+                onSelect={setSelectedGenre}
+                onPlaySound={playGenreSound}
+                onBpmChange={handleBpmChange}
+              />
+            </div>
           </aside>
         </main>
 
-        {/* Keyboard Shortcuts Hint */}
+        {/* Keyboard Shortcuts */}
         <KeyboardShortcutsHint />
 
-        {/* Bottom - Playback */}
+        {/* Footer - Playback */}
         <footer className="border-t border-border/30 bg-background/50 backdrop-blur-sm">
           <PlaybackControls
             isPlaying={isPlaying}
             onPlayPause={() => setIsPlaying(!isPlaying)}
-            bpm={rhythm}
+            bpm={bpm}
             currentTime={currentTime}
           />
         </footer>
