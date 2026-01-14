@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { Header } from "@/components/Header";
 import { UniverseBackground } from "@/components/UniverseBackground";
 import { PlaybackControls } from "@/components/PlaybackControls";
@@ -11,8 +11,9 @@ import { CrowdParticipants } from "@/components/CrowdParticipants";
 import { GenreSelector } from "@/components/GenreSelector";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { useAudioEngine } from "@/hooks/useAudioEngine";
+import { useRealtimeSession } from "@/hooks/useRealtimeSession";
 import { toast } from "sonner";
-import { Crown, Mic, Share2, Settings, Music, Layers, Users } from "lucide-react";
+import { Crown, Mic, Share2, Settings, Music, Layers, Users, Wifi, WifiOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
@@ -36,15 +37,26 @@ const initialSections: SessionSection[] = [
 ];
 
 const Index = () => {
-  // Producer mode - in real app this would be from auth
-  const [isProducer] = useState(true);
+  // Realtime session hook
+  const {
+    session,
+    clips: realtimeClips,
+    participants,
+    sections: realtimeSections,
+    isConnected,
+    isLoading,
+    userId,
+    submitClip,
+    voteOnClip,
+    updateClipStatus,
+    addSection,
+    toggleSectionLock,
+    isProducer,
+  } = useRealtimeSession();
   
-  // Session state
-  const [sessionId] = useState("session-demo-001");
-  const [sessionName] = useState("Crowd Banger #1");
-  const [sections, setSections] = useState<SessionSection[]>(initialSections);
+  // Local state
+  const [localSections, setLocalSections] = useState<SessionSection[]>(initialSections);
   const [currentSection, setCurrentSection] = useState("intro");
-  const [clips, setClips] = useState<AudioClip[]>([]);
   
   // Voting state
   const [votingTimeLeft, setVotingTimeLeft] = useState(120);
@@ -56,14 +68,48 @@ const Index = () => {
   
   // Audio parameters
   const [selectedGenre, setSelectedGenre] = useState("groove");
-  const [bpm, setBpm] = useState(120);
+  const [bpm, setBpm] = useState(session?.bpm || 120);
   
   // Mobile panel state
   const [activeTab, setActiveTab] = useState("submit");
   
   const { playGenreSound, startPlayback, stopPlayback } = useAudioEngine();
+
+  // Convert realtime clips to local format
+  const clips: AudioClip[] = useMemo(() => 
+    realtimeClips.map(c => ({
+      id: c.id,
+      name: c.name,
+      duration: c.duration,
+      submittedBy: {
+        id: c.submitted_by_id,
+        name: c.submitted_by_name,
+        avatar: c.submitted_by_avatar,
+      },
+      type: c.type,
+      waveform: c.waveform,
+      status: c.status,
+      votes: { up: c.votes_up, down: c.votes_down },
+      timestamp: new Date(c.created_at),
+      aiScore: c.ai_score,
+    })),
+  [realtimeClips]);
+
+  // Convert realtime sections to local format
+  const sections: SessionSection[] = useMemo(() => {
+    if (realtimeSections.length === 0) return localSections;
+    return realtimeSections.map(s => ({
+      id: s.id,
+      name: s.name,
+      bars: s.bars,
+      isActive: s.id === currentSection,
+      isLocked: s.is_locked,
+      clips: clips.filter(c => c.status === "approved" && (c as any).section_id === s.id),
+    }));
+  }, [realtimeSections, currentSection, clips, localSections]);
   
   const musicIntensity = clips.length * 10 + bpm / 2;
+  const sessionName = session?.name || "Crowd Banger #1";
 
   // Clock
   useEffect(() => {
@@ -102,127 +148,96 @@ const Index = () => {
     }
   }, [isPlaying]);
 
-  // Process voting results
-  const processVotingResults = () => {
+  // Process voting results - now uses realtime
+  const processVotingResults = useCallback(() => {
     const votingClips = clips.filter((c) => c.status === "voting");
     votingClips.forEach((clip) => {
       if (clip.votes.up > clip.votes.down) {
-        // Move to pending producer approval
-        setClips((prev) =>
-          prev.map((c) =>
-            c.id === clip.id ? { ...c, status: "pending" } : c
-          )
-        );
+        updateClipStatus(clip.id, "approved", currentSection);
         toast.info(`"${clip.name}" passed voting!`, {
           description: "Waiting for producer approval",
         });
       } else {
-        setClips((prev) =>
-          prev.map((c) =>
-            c.id === clip.id ? { ...c, status: "rejected" } : c
-          )
-        );
+        updateClipStatus(clip.id, "rejected");
       }
     });
-  };
+  }, [clips, updateClipStatus, currentSection]);
 
-  // Handle clip submission
-  const handleSubmitClip = (clip: AudioClip) => {
-    const newClip = {
-      ...clip,
-      status: isProducer ? "approved" : "voting",
-    } as AudioClip;
+  // Handle clip submission - now uses realtime
+  const handleSubmitClip = useCallback(async (clip: AudioClip) => {
+    const status = isProducer ? "approved" : "voting";
     
-    setClips((prev) => [...prev, newClip]);
-    
-    if (newClip.status === "approved") {
-      // Add directly to current section
-      setSections((prev) =>
-        prev.map((s) =>
-          s.id === currentSection
-            ? { ...s, clips: [...s.clips, newClip] }
-            : s
-        )
-      );
+    await submitClip({
+      name: clip.name,
+      duration: clip.duration,
+      type: clip.type,
+      waveform: clip.waveform,
+      status,
+      ai_score: clip.aiScore,
+      submitted_by_id: userId,
+      submitted_by_name: clip.submittedBy.name,
+      submitted_by_avatar: clip.submittedBy.avatar,
+      section_id: status === "approved" ? currentSection : undefined,
+    });
+  }, [isProducer, submitClip, userId, currentSection]);
+
+  // Handle voting - now uses realtime
+  const handleVote = useCallback(async (clipId: string, vote: "up" | "down") => {
+    const success = await voteOnClip(clipId, vote);
+    if (success) {
+      toast.success(`Vote recorded: ${vote === "up" ? "👍" : "👎"}`);
     }
-  };
+  }, [voteOnClip]);
 
-  // Handle voting
-  const handleVote = (clipId: string, vote: "up" | "down") => {
-    setClips((prev) =>
-      prev.map((c) =>
-        c.id === clipId
-          ? {
-              ...c,
-              votes: {
-                up: c.votes.up + (vote === "up" ? 1 : 0),
-                down: c.votes.down + (vote === "down" ? 1 : 0),
-              },
-            }
-          : c
-      )
-    );
-  };
-
-  // Producer approval
-  const handleProducerApprove = (clipId: string) => {
+  // Producer approval - now uses realtime
+  const handleProducerApprove = useCallback(async (clipId: string) => {
     const clip = clips.find((c) => c.id === clipId);
     if (!clip) return;
 
-    setClips((prev) =>
-      prev.map((c) =>
-        c.id === clipId ? { ...c, status: "approved" } : c
-      )
-    );
-
-    // Add to current section
-    setSections((prev) =>
-      prev.map((s) =>
-        s.id === currentSection
-          ? { ...s, clips: [...s.clips, { ...clip, status: "approved" }] }
-          : s
-      )
-    );
+    await updateClipStatus(clipId, "approved", currentSection);
 
     toast.success(`Approved "${clip.name}"`, {
       description: `Added to ${sections.find((s) => s.id === currentSection)?.name}`,
     });
-  };
+  }, [clips, updateClipStatus, currentSection, sections]);
 
-  // Producer rejection
-  const handleProducerReject = (clipId: string) => {
+  // Producer rejection - now uses realtime
+  const handleProducerReject = useCallback(async (clipId: string) => {
     const clip = clips.find((c) => c.id === clipId);
-    setClips((prev) =>
-      prev.map((c) =>
-        c.id === clipId ? { ...c, status: "rejected" } : c
-      )
-    );
+    await updateClipStatus(clipId, "rejected");
     toast.info(`Rejected "${clip?.name}"`);
-  };
+  }, [clips, updateClipStatus]);
 
   // Section management
-  const handleSelectSection = (sectionId: string) => {
+  const handleSelectSection = useCallback((sectionId: string) => {
     setCurrentSection(sectionId);
     toast.info(`Working on: ${sections.find((s) => s.id === sectionId)?.name}`);
-  };
+  }, [sections]);
 
-  const handleAddSection = () => {
+  const handleAddSection = useCallback(async () => {
     const sectionNames = ["Drop", "Breakdown", "Build", "Hook", "Verse", "Chorus"];
     const randomName = sectionNames[Math.floor(Math.random() * sectionNames.length)];
-    const newSection: SessionSection = {
-      id: `section-${Date.now()}`,
-      name: randomName,
-      bars: 8,
-      isActive: false,
-      isLocked: false,
-      clips: [],
-    };
-    setSections((prev) => [...prev, newSection]);
+    
+    if (session) {
+      await addSection(randomName, 8);
+    } else {
+      // Fallback for local state
+      const newSection: SessionSection = {
+        id: `section-${Date.now()}`,
+        name: randomName,
+        bars: 8,
+        isActive: false,
+        isLocked: false,
+        clips: [],
+      };
+      setLocalSections((prev) => [...prev, newSection]);
+    }
     toast.success(`Added ${randomName} section`);
-  };
+  }, [session, addSection]);
 
-  const handleRemoveClip = (sectionId: string, clipId: string) => {
-    setSections((prev) =>
+  const handleRemoveClip = useCallback((sectionId: string, clipId: string) => {
+    // For now, removing clips from sections is handled locally
+    setLocalSections((prev) =>
       prev.map((s) =>
         s.id === sectionId
           ? { ...s, clips: s.clips.filter((c) => c.id !== clipId) }
@@ -230,18 +245,22 @@ const Index = () => {
       )
     );
     toast.info("Clip removed from section");
-  };
+  }, []);
 
-  const handleToggleSectionLock = (sectionId: string) => {
-    setSections((prev) =>
-      prev.map((s) =>
-        s.id === sectionId ? { ...s, isLocked: !s.isLocked } : s
-      )
-    );
-  };
+  const handleToggleSectionLock = useCallback(async (sectionId: string) => {
+    if (session) {
+      await toggleSectionLock(sectionId);
+    } else {
+      setLocalSections((prev) =>
+        prev.map((s) =>
+          s.id === sectionId ? { ...s, isLocked: !s.isLocked } : s
+        )
+      );
+    }
+  }, [session, toggleSectionLock]);
 
   // AI suggestion handler
-  const handleAISuggestion = (suggestion: any) => {
+  const handleAISuggestion = useCallback((suggestion: any) => {
     if (suggestion.action?.clipId) {
       handleProducerApprove(suggestion.action.clipId);
     } else {
@@ -249,17 +268,17 @@ const Index = () => {
         description: suggestion.title,
       });
     }
-  };
+  }, [handleProducerApprove]);
 
   // Keyboard shortcuts
   useKeyboardShortcuts({
     onPlayPause: () => setIsPlaying(!isPlaying),
     onLockAll: () => {
-      setSections((prev) => prev.map((s) => ({ ...s, isLocked: true })));
+      setLocalSections((prev) => prev.map((s) => ({ ...s, isLocked: true })));
       toast.success("All sections locked");
     },
     onUnlockAll: () => {
-      setSections((prev) => prev.map((s) => ({ ...s, isLocked: false })));
+      setLocalSections((prev) => prev.map((s) => ({ ...s, isLocked: false })));
       toast.success("All sections unlocked");
     },
     onUndo: () => toast.info("Undo not available in this view"),
@@ -295,6 +314,11 @@ const Index = () => {
                     PRODUCER
                   </span>
                 )}
+                {/* Connection status */}
+                <span className={`flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full ${isConnected ? 'bg-green-500/20 text-green-400 border border-green-500/30' : 'bg-red-500/20 text-red-400 border border-red-500/30'}`}>
+                  {isConnected ? <Wifi className="w-3 h-3" /> : <WifiOff className="w-3 h-3" />}
+                  {isConnected ? 'LIVE' : 'OFFLINE'}
+                </span>
               </div>
             </div>
             
@@ -387,7 +411,7 @@ const Index = () => {
                     isProducer={isProducer}
                     votingTimeLeft={votingTimeLeft}
                   />
-                  <CrowdParticipants sessionId={sessionId} isProducer={isProducer} />
+                  <CrowdParticipants sessionId={session?.id || "demo"} isProducer={isProducer} />
                 </TabsContent>
                 <TabsContent value="timeline" className="mt-0">
                   <SessionTimeline
@@ -449,7 +473,7 @@ const Index = () => {
               isProducer={isProducer}
             />
             
-            <CrowdParticipants sessionId={sessionId} isProducer={isProducer} />
+            <CrowdParticipants sessionId={session?.id || "demo"} isProducer={isProducer} />
             
             {/* Mobile Genre Selector */}
             <div className="lg:hidden">

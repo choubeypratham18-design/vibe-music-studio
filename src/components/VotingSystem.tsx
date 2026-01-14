@@ -1,9 +1,10 @@
-import { useState } from "react";
-import { ThumbsUp, ThumbsDown, Play, Pause, Sparkles, Crown, Clock, CheckCircle, XCircle } from "lucide-react";
+import { useState, useEffect } from "react";
+import { ThumbsUp, ThumbsDown, Play, Pause, Sparkles, Crown, Clock, CheckCircle, XCircle, Volume2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 import { AudioClip } from "./ClipSubmission";
+import { useAudioPlayback } from "@/hooks/useAudioPlayback";
 
 interface VotingSystemProps {
   clips: AudioClip[];
@@ -24,6 +25,7 @@ export const VotingSystem = ({
 }: VotingSystemProps) => {
   const [playingClipId, setPlayingClipId] = useState<string | null>(null);
   const [votedClips, setVotedClips] = useState<Set<string>>(new Set());
+  const { togglePlayClip, getClipState, initAudioContext } = useAudioPlayback();
 
   const pendingClips = clips.filter(c => c.status === "voting" || c.status === "pending");
   
@@ -37,9 +39,32 @@ export const VotingSystem = ({
     toast.success(`Vote recorded: ${vote === "up" ? "👍" : "👎"}`);
   };
 
-  const togglePlay = (clipId: string) => {
-    setPlayingClipId(playingClipId === clipId ? null : clipId);
+  const togglePlay = async (clip: AudioClip) => {
+    // Initialize audio context on user interaction
+    initAudioContext();
+    
+    if (playingClipId === clip.id) {
+      await togglePlayClip(clip.id);
+      setPlayingClipId(null);
+    } else {
+      // Stop any currently playing clip
+      if (playingClipId) {
+        await togglePlayClip(playingClipId);
+      }
+      await togglePlayClip(clip.id, undefined, clip.type, clip.duration);
+      setPlayingClipId(clip.id);
+    }
   };
+
+  // Update playingClipId when clip finishes
+  useEffect(() => {
+    if (playingClipId) {
+      const state = getClipState(playingClipId);
+      if (!state.isPlaying && state.duration > 0) {
+        setPlayingClipId(null);
+      }
+    }
+  }, [playingClipId, getClipState]);
 
   const getVotePercentage = (clip: AudioClip) => {
     const total = clip.votes.up + clip.votes.down;
@@ -90,148 +115,163 @@ export const VotingSystem = ({
       </div>
 
       <div className="space-y-3 max-h-64 overflow-y-auto">
-        {pendingClips.map((clip) => (
-          <div
-            key={clip.id}
-            className={`
-              bg-background/40 rounded-lg p-3 border transition-all
-              ${clip.status === "voting" 
-                ? "border-ai-gold/40 hover:border-ai-gold/60" 
-                : "border-border/30 hover:border-border/50"
-              }
-            `}
-          >
-            {/* Clip Header */}
-            <div className="flex items-center gap-2 mb-2">
-              <button
-                onClick={() => togglePlay(clip.id)}
-                className="w-8 h-8 rounded-full bg-ai-purple/20 hover:bg-ai-purple/30 flex items-center justify-center transition-all"
-              >
-                {playingClipId === clip.id ? (
-                  <Pause className="w-4 h-4 text-ai-purple" />
-                ) : (
-                  <Play className="w-4 h-4 text-ai-purple ml-0.5" />
-                )}
-              </button>
-              
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="font-display text-xs font-semibold truncate">
-                    {clip.name}
-                  </span>
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted/50 text-muted-foreground">
-                    {clip.type}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
-                  <span>{clip.submittedBy.avatar} {clip.submittedBy.name}</span>
-                  <span>•</span>
-                  <span>{clip.duration}s</span>
-                </div>
-              </div>
-
-              {/* AI Score */}
-              {clip.aiScore && (
-                <div className="flex items-center gap-1 px-2 py-1 rounded bg-ai-cyan/10 border border-ai-cyan/20">
-                  <Sparkles className="w-3 h-3 text-ai-cyan" />
-                  <span className="text-[10px] font-mono text-ai-cyan">{clip.aiScore}%</span>
-                </div>
-              )}
-            </div>
-
-            {/* Waveform Preview */}
-            <div className="flex items-end gap-0.5 h-8 mb-3">
-              {clip.waveform.map((val, i) => (
-                <div
-                  key={i}
+        {pendingClips.map((clip) => {
+          const clipState = getClipState(clip.id);
+          const isPlaying = playingClipId === clip.id && clipState.isPlaying;
+          
+          return (
+            <div
+              key={clip.id}
+              className={`
+                bg-background/40 rounded-lg p-3 border transition-all
+                ${clip.status === "voting" 
+                  ? "border-ai-gold/40 hover:border-ai-gold/60" 
+                  : "border-border/30 hover:border-border/50"
+                }
+              `}
+            >
+              {/* Clip Header */}
+              <div className="flex items-center gap-2 mb-2">
+                <button
+                  onClick={() => togglePlay(clip)}
                   className={`
-                    flex-1 rounded-full transition-all
-                    ${playingClipId === clip.id ? "bg-ai-purple" : "bg-muted-foreground/30"}
+                    w-8 h-8 rounded-full flex items-center justify-center transition-all
+                    ${isPlaying 
+                      ? "bg-ai-purple/40 border-2 border-ai-purple animate-pulse" 
+                      : "bg-ai-purple/20 hover:bg-ai-purple/30"
+                    }
                   `}
-                  style={{ 
-                    height: `${Math.max(10, val * 0.8)}%`,
-                    animationDelay: `${i * 50}ms`,
-                  }}
-                />
-              ))}
-            </div>
+                >
+                  {isPlaying ? (
+                    <Pause className="w-4 h-4 text-ai-purple" />
+                  ) : (
+                    <Play className="w-4 h-4 text-ai-purple ml-0.5" />
+                  )}
+                </button>
+                
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="font-display text-xs font-semibold truncate">
+                      {clip.name}
+                    </span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted/50 text-muted-foreground">
+                      {clip.type}
+                    </span>
+                    {isPlaying && (
+                      <Volume2 className="w-3 h-3 text-ai-cyan animate-pulse" />
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+                    <span>{clip.submittedBy.avatar} {clip.submittedBy.name}</span>
+                    <span>•</span>
+                    <span>{clip.duration}s</span>
+                  </div>
+                </div>
 
-            {/* Vote Progress Bar */}
-            <div className="mb-3">
-              <div className="flex justify-between text-[10px] mb-1">
-                <span className="text-green-400">👍 {clip.votes.up}</span>
-                <span className="text-red-400">👎 {clip.votes.down}</span>
+                {/* AI Score */}
+                {clip.aiScore && (
+                  <div className="flex items-center gap-1 px-2 py-1 rounded bg-ai-cyan/10 border border-ai-cyan/20">
+                    <Sparkles className="w-3 h-3 text-ai-cyan" />
+                    <span className="text-[10px] font-mono text-ai-cyan">{clip.aiScore}%</span>
+                  </div>
+                )}
               </div>
-              <div className="h-2 rounded-full overflow-hidden bg-red-500/30">
-                <div 
-                  className="h-full bg-green-500 transition-all duration-500"
-                  style={{ width: `${getVotePercentage(clip)}%` }}
-                />
-              </div>
-            </div>
 
-            {/* Actions */}
-            <div className="flex gap-2">
-              {isProducer ? (
-                // Producer Controls
-                <>
-                  <Button
-                    size="sm"
-                    onClick={() => onProducerApprove(clip.id)}
-                    className="flex-1 h-8 bg-green-500/20 hover:bg-green-500/30 text-green-400 border border-green-500/30"
-                  >
-                    <CheckCircle className="w-3 h-3 mr-1" />
-                    Approve
-                  </Button>
-                  <Button
-                    size="sm"
-                    onClick={() => onProducerReject(clip.id)}
-                    className="flex-1 h-8 bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30"
-                  >
-                    <XCircle className="w-3 h-3 mr-1" />
-                    Reject
-                  </Button>
-                </>
-              ) : (
-                // Collaborator Voting
-                <>
-                  <Button
-                    size="sm"
-                    onClick={() => handleVote(clip.id, "up")}
-                    disabled={votedClips.has(clip.id)}
+              {/* Waveform Preview - Animated when playing */}
+              <div className="flex items-end gap-0.5 h-8 mb-3">
+                {clip.waveform.map((val, i) => (
+                  <div
+                    key={i}
                     className={`
-                      flex-1 h-8 transition-all
-                      ${votedClips.has(clip.id) 
-                        ? "opacity-50" 
-                        : "hover:bg-green-500/20 hover:text-green-400 hover:border-green-500/30"
-                      }
+                      flex-1 rounded-full transition-all duration-150
+                      ${isPlaying ? "bg-ai-purple" : "bg-muted-foreground/30"}
                     `}
-                    variant="outline"
-                  >
-                    <ThumbsUp className="w-3 h-3 mr-1" />
-                    Vote Up
-                  </Button>
-                  <Button
-                    size="sm"
-                    onClick={() => handleVote(clip.id, "down")}
-                    disabled={votedClips.has(clip.id)}
-                    className={`
-                      flex-1 h-8 transition-all
-                      ${votedClips.has(clip.id) 
-                        ? "opacity-50" 
-                        : "hover:bg-red-500/20 hover:text-red-400 hover:border-red-500/30"
-                      }
-                    `}
-                    variant="outline"
-                  >
-                    <ThumbsDown className="w-3 h-3 mr-1" />
-                    Vote Down
-                  </Button>
-                </>
-              )}
+                    style={{ 
+                      height: `${Math.max(10, val * 0.8)}%`,
+                      transform: isPlaying ? `scaleY(${0.5 + Math.random() * 0.5})` : 'scaleY(1)',
+                      animationDelay: `${i * 50}ms`,
+                    }}
+                  />
+                ))}
+              </div>
+
+              {/* Vote Progress Bar */}
+              <div className="mb-3">
+                <div className="flex justify-between text-[10px] mb-1">
+                  <span className="text-green-400">👍 {clip.votes.up}</span>
+                  <span className="text-red-400">👎 {clip.votes.down}</span>
+                </div>
+                <div className="h-2 rounded-full overflow-hidden bg-red-500/30">
+                  <div 
+                    className="h-full bg-green-500 transition-all duration-500"
+                    style={{ width: `${getVotePercentage(clip)}%` }}
+                  />
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex gap-2">
+                {isProducer ? (
+                  // Producer Controls
+                  <>
+                    <Button
+                      size="sm"
+                      onClick={() => onProducerApprove(clip.id)}
+                      className="flex-1 h-8 bg-green-500/20 hover:bg-green-500/30 text-green-400 border border-green-500/30"
+                    >
+                      <CheckCircle className="w-3 h-3 mr-1" />
+                      Approve
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={() => onProducerReject(clip.id)}
+                      className="flex-1 h-8 bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30"
+                    >
+                      <XCircle className="w-3 h-3 mr-1" />
+                      Reject
+                    </Button>
+                  </>
+                ) : (
+                  // Collaborator Voting
+                  <>
+                    <Button
+                      size="sm"
+                      onClick={() => handleVote(clip.id, "up")}
+                      disabled={votedClips.has(clip.id)}
+                      className={`
+                        flex-1 h-8 transition-all
+                        ${votedClips.has(clip.id) 
+                          ? "opacity-50" 
+                          : "hover:bg-green-500/20 hover:text-green-400 hover:border-green-500/30"
+                        }
+                      `}
+                      variant="outline"
+                    >
+                      <ThumbsUp className="w-3 h-3 mr-1" />
+                      Vote Up
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={() => handleVote(clip.id, "down")}
+                      disabled={votedClips.has(clip.id)}
+                      className={`
+                        flex-1 h-8 transition-all
+                        ${votedClips.has(clip.id) 
+                          ? "opacity-50" 
+                          : "hover:bg-red-500/20 hover:text-red-400 hover:border-red-500/30"
+                        }
+                      `}
+                      variant="outline"
+                    >
+                      <ThumbsDown className="w-3 h-3 mr-1" />
+                      Vote Down
+                    </Button>
+                  </>
+                )}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Producer Status */}

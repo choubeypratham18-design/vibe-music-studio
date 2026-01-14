@@ -14,7 +14,218 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      clips: {
+        Row: {
+          ai_score: number | null
+          audio_url: string | null
+          created_at: string
+          duration: number
+          id: string
+          name: string
+          section_id: string | null
+          session_id: string
+          status: string | null
+          submitted_by_avatar: string | null
+          submitted_by_id: string
+          submitted_by_name: string
+          type: string
+          votes_down: number | null
+          votes_up: number | null
+          waveform: Json | null
+        }
+        Insert: {
+          ai_score?: number | null
+          audio_url?: string | null
+          created_at?: string
+          duration: number
+          id?: string
+          name: string
+          section_id?: string | null
+          session_id: string
+          status?: string | null
+          submitted_by_avatar?: string | null
+          submitted_by_id: string
+          submitted_by_name: string
+          type: string
+          votes_down?: number | null
+          votes_up?: number | null
+          waveform?: Json | null
+        }
+        Update: {
+          ai_score?: number | null
+          audio_url?: string | null
+          created_at?: string
+          duration?: number
+          id?: string
+          name?: string
+          section_id?: string | null
+          session_id?: string
+          status?: string | null
+          submitted_by_avatar?: string | null
+          submitted_by_id?: string
+          submitted_by_name?: string
+          type?: string
+          votes_down?: number | null
+          votes_up?: number | null
+          waveform?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "clips_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      participants: {
+        Row: {
+          created_at: string
+          id: string
+          is_online: boolean | null
+          last_seen: string | null
+          role: string | null
+          session_id: string
+          user_avatar: string | null
+          user_id: string
+          user_name: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_online?: boolean | null
+          last_seen?: string | null
+          role?: string | null
+          session_id: string
+          user_avatar?: string | null
+          user_id: string
+          user_name: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_online?: boolean | null
+          last_seen?: string | null
+          role?: string | null
+          session_id?: string
+          user_avatar?: string | null
+          user_id?: string
+          user_name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "participants_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sections: {
+        Row: {
+          bars: number | null
+          created_at: string
+          id: string
+          is_locked: boolean | null
+          name: string
+          position: number | null
+          session_id: string
+        }
+        Insert: {
+          bars?: number | null
+          created_at?: string
+          id?: string
+          is_locked?: boolean | null
+          name: string
+          position?: number | null
+          session_id: string
+        }
+        Update: {
+          bars?: number | null
+          created_at?: string
+          id?: string
+          is_locked?: boolean | null
+          name?: string
+          position?: number | null
+          session_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sections_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sessions: {
+        Row: {
+          bpm: number | null
+          created_at: string
+          genre: string | null
+          id: string
+          is_active: boolean | null
+          name: string
+          producer_id: string
+          updated_at: string
+        }
+        Insert: {
+          bpm?: number | null
+          created_at?: string
+          genre?: string | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+          producer_id: string
+          updated_at?: string
+        }
+        Update: {
+          bpm?: number | null
+          created_at?: string
+          genre?: string | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          producer_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      votes: {
+        Row: {
+          clip_id: string
+          created_at: string
+          id: string
+          user_id: string
+          vote_type: string
+        }
+        Insert: {
+          clip_id: string
+          created_at?: string
+          id?: string
+          user_id: string
+          vote_type: string
+        }
+        Update: {
+          clip_id?: string
+          created_at?: string
+          id?: string
+          user_id?: string
+          vote_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "votes_clip_id_fkey"
+            columns: ["clip_id"]
+            isOneToOne: false
+            referencedRelation: "clips"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
