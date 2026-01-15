@@ -990,6 +990,99 @@ export const useAudioEngine = () => {
     };
   }, [stopPlayback]);
 
+  // Play a specific piano note by frequency
+  const playPianoNote = useCallback((frequency: number, velocity: number = 80) => {
+    const ctx = initAudioContext();
+    if (ctx.state === "suspended") ctx.resume();
+
+    const pianoGain = instrumentGainsRef.current.piano || masterGainRef.current!;
+    const intensity = velocity / 100;
+    const now = ctx.currentTime;
+
+    // Piano harmonics with realistic decay
+    const harmonics = [1, 2, 3, 4, 5, 6];
+    const harmonicGains = [1, 0.5, 0.33, 0.25, 0.2, 0.16];
+
+    harmonics.forEach((harmonic, i) => {
+      const osc = ctx.createOscillator();
+      const oscGain = ctx.createGain();
+      const filter = ctx.createBiquadFilter();
+
+      osc.type = "sine";
+      osc.frequency.value = frequency * harmonic;
+
+      filter.type = "lowpass";
+      filter.frequency.value = 5000 - (harmonic * 300);
+
+      const vol = harmonicGains[i] * 0.12 * intensity;
+      oscGain.gain.setValueAtTime(0, now);
+      oscGain.gain.linearRampToValueAtTime(vol, now + 0.005);
+      oscGain.gain.exponentialRampToValueAtTime(vol * 0.4, now + 0.15);
+      oscGain.gain.exponentialRampToValueAtTime(0.001, now + 1.2);
+
+      osc.connect(filter);
+      filter.connect(oscGain);
+      oscGain.connect(pianoGain);
+
+      if (reverbRef.current && i === 0) {
+        oscGain.connect(reverbRef.current);
+      }
+
+      osc.start(now);
+      osc.stop(now + 1.2);
+    });
+  }, [initAudioContext]);
+
+  // Play violin sound
+  const playViolin = useCallback((value: number, noteIndex?: number) => {
+    const ctx = initAudioContext();
+    if (ctx.state === "suspended") ctx.resume();
+
+    const now = ctx.currentTime;
+    const intensity = value / 100;
+
+    const violinNotes = [196.00, 293.66, 440.00, 659.25];
+    const baseFreq = violinNotes[noteIndex !== undefined ? noteIndex % violinNotes.length : 0];
+
+    // Violin FM synthesis
+    const modulator = ctx.createOscillator();
+    const modulatorGain = ctx.createGain();
+    modulator.type = "triangle";
+    modulator.frequency.value = 5 + Math.random() * 3;
+    modulatorGain.gain.value = 8;
+
+    const carrier = ctx.createOscillator();
+    const carrierGain = ctx.createGain();
+    carrier.type = "sawtooth";
+    carrier.frequency.value = baseFreq;
+
+    modulator.connect(modulatorGain);
+    modulatorGain.connect(carrier.frequency);
+
+    const filter = ctx.createBiquadFilter();
+    filter.type = "lowpass";
+    filter.frequency.value = 2000 + value * 30;
+    filter.Q.value = 2;
+
+    carrierGain.gain.setValueAtTime(0, now);
+    carrierGain.gain.linearRampToValueAtTime(0.2 * intensity, now + 0.1);
+    carrierGain.gain.setValueAtTime(0.15 * intensity, now + 0.3);
+    carrierGain.gain.exponentialRampToValueAtTime(0.001, now + 1.5);
+
+    carrier.connect(carrierGain);
+    carrierGain.connect(filter);
+    filter.connect(masterGainRef.current!);
+
+    if (reverbRef.current) {
+      filter.connect(reverbRef.current);
+    }
+
+    modulator.start(now);
+    carrier.start(now);
+    modulator.stop(now + 1.5);
+    carrier.stop(now + 1.5);
+  }, [initAudioContext]);
+
   return {
     playNote: playPiano,
     playHarmony,
@@ -998,9 +1091,11 @@ export const useAudioEngine = () => {
     playAtmosphere,
     playGenreSound,
     playPiano,
+    playPianoNote,
     playDrums,
     playBass,
     playSynth,
+    playViolin,
     startPlayback,
     stopPlayback,
     isRecording,

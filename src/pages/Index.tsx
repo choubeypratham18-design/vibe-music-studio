@@ -12,11 +12,15 @@ import { GenreSelector } from "@/components/GenreSelector";
 import { InstrumentPanel } from "@/components/InstrumentPanel";
 import { RecordingControls } from "@/components/RecordingControls";
 import { CollaborativeFeedback } from "@/components/CollaborativeFeedback";
+import { WaveformVisualizer } from "@/components/WaveformVisualizer";
+import { PianoKeyboard } from "@/components/PianoKeyboard";
+import { ViolinPlayer } from "@/components/ViolinPlayer";
+import { InviteSystem } from "@/components/InviteSystem";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { useAudioEngine } from "@/hooks/useAudioEngine";
 import { useRealtimeSession } from "@/hooks/useRealtimeSession";
 import { toast } from "sonner";
-import { Crown, Mic, Share2, Settings, Music, Layers, Users, Wifi, WifiOff, Volume2 } from "lucide-react";
+import { Crown, Mic, Settings, Music, Layers, Users, Wifi, WifiOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
@@ -90,14 +94,23 @@ const Index = () => {
     startPlayback, 
     stopPlayback, 
     playPiano, 
+    playPianoNote,
     playDrums, 
     playBass, 
     playSynth,
+    playViolin,
     isRecording,
     startRecording,
     stopRecording,
     exportRecording,
+    getAnalyser,
   } = useAudioEngine();
+
+  // State for violin
+  const [violin, setViolin] = useState(50);
+
+  // Get analyser for waveform visualization
+  const analyser = useMemo(() => getAnalyser(), [getAnalyser]);
 
   // Convert realtime clips to local format
   const clips: AudioClip[] = useMemo(() => 
@@ -369,6 +382,16 @@ const Index = () => {
     playSynth(value);
   }, [playSynth]);
 
+  // Handle violin interaction
+  const handleViolinInteract = useCallback((value: number, noteIndex?: number) => {
+    playViolin(value, noteIndex);
+  }, [playViolin]);
+
+  // Handle piano keyboard note play
+  const handlePianoKeyPress = useCallback((frequency: number, velocity: number) => {
+    playPianoNote(frequency, velocity);
+  }, [playPianoNote]);
+
   // Apply suggestion from collaborators
   const handleApplyFeedbackSuggestion = useCallback((param: string, value: number) => {
     switch (param) {
@@ -421,10 +444,15 @@ const Index = () => {
             </div>
             
             <div className="flex items-center gap-2">
-              <Button variant="ghost" size="sm" className="hidden sm:flex gap-1 text-xs">
-                <Share2 className="w-4 h-4" />
-                Invite
-              </Button>
+              <InviteSystem
+                sessionId={session?.id || "demo"}
+                sessionName={sessionName}
+                isProducer={isProducer}
+                onJoinWithCode={async (code) => {
+                  toast.info(`Joining with code: ${code}`);
+                  return true;
+                }}
+              />
               <Button variant="ghost" size="sm" className="gap-1 text-xs">
                 <Settings className="w-4 h-4" />
                 <span className="hidden sm:inline">Settings</span>
@@ -537,6 +565,22 @@ const Index = () => {
               />
             </div>
 
+            {/* Waveform Visualizer - Real-time audio visualization */}
+            <WaveformVisualizer
+              isPlaying={isPlaying}
+              analyser={analyser}
+              piano={piano}
+              drums={drums}
+              bass={bass}
+              synth={synth}
+            />
+
+            {/* Piano Keyboard - Interactive */}
+            <PianoKeyboard
+              onPlayNote={handlePianoKeyPress}
+              isEnabled={true}
+            />
+
             {/* Instrument Panel - Interactive Sounds */}
             <InstrumentPanel
               piano={piano}
@@ -551,6 +595,13 @@ const Index = () => {
               onDrumsInteract={handleDrumsInteract}
               onBassInteract={handleBassInteract}
               onSynthInteract={handleSynthInteract}
+            />
+
+            {/* Violin Player */}
+            <ViolinPlayer
+              value={violin}
+              onChange={setViolin}
+              onPlay={handleViolinInteract}
             />
 
             {/* Recording Controls */}
