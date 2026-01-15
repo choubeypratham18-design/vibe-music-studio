@@ -9,11 +9,14 @@ import { SessionTimeline } from "@/components/SessionTimeline";
 import { AIDJPanel } from "@/components/AIDJPanel";
 import { CrowdParticipants } from "@/components/CrowdParticipants";
 import { GenreSelector } from "@/components/GenreSelector";
+import { InstrumentPanel } from "@/components/InstrumentPanel";
+import { RecordingControls } from "@/components/RecordingControls";
+import { CollaborativeFeedback } from "@/components/CollaborativeFeedback";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { useAudioEngine } from "@/hooks/useAudioEngine";
 import { useRealtimeSession } from "@/hooks/useRealtimeSession";
 import { toast } from "sonner";
-import { Crown, Mic, Share2, Settings, Music, Layers, Users, Wifi, WifiOff } from "lucide-react";
+import { Crown, Mic, Share2, Settings, Music, Layers, Users, Wifi, WifiOff, Volume2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
@@ -70,10 +73,31 @@ const Index = () => {
   const [selectedGenre, setSelectedGenre] = useState("groove");
   const [bpm, setBpm] = useState(session?.bpm || 120);
   
+  // Instrument parameters
+  const [piano, setPiano] = useState(60);
+  const [drums, setDrums] = useState(70);
+  const [bass, setBass] = useState(65);
+  const [synth, setSynth] = useState(50);
+  const [harmony, setHarmony] = useState(50);
+  const [texture, setTexture] = useState(30);
+  const [atmosphere, setAtmosphere] = useState(40);
+  
   // Mobile panel state
   const [activeTab, setActiveTab] = useState("submit");
   
-  const { playGenreSound, startPlayback, stopPlayback } = useAudioEngine();
+  const { 
+    playGenreSound, 
+    startPlayback, 
+    stopPlayback, 
+    playPiano, 
+    playDrums, 
+    playBass, 
+    playSynth,
+    isRecording,
+    startRecording,
+    stopRecording,
+    exportRecording,
+  } = useAudioEngine();
 
   // Convert realtime clips to local format
   const clips: AudioClip[] = useMemo(() => 
@@ -272,7 +296,7 @@ const Index = () => {
 
   // Keyboard shortcuts
   useKeyboardShortcuts({
-    onPlayPause: () => setIsPlaying(!isPlaying),
+    onPlayPause: () => handlePlayPause(),
     onLockAll: () => {
       setLocalSections((prev) => prev.map((s) => ({ ...s, isLocked: true })));
       toast.success("All sections locked");
@@ -284,6 +308,80 @@ const Index = () => {
     onUndo: () => toast.info("Undo not available in this view"),
     onToggleAB: () => toast.info("A/B mode coming soon"),
   });
+
+  // Handle play/pause with audio engine
+  const handlePlayPause = useCallback(() => {
+    if (isPlaying) {
+      stopPlayback();
+      setIsPlaying(false);
+      toast.info("Playback stopped");
+    } else {
+      startPlayback({
+        bpm,
+        harmony,
+        texture,
+        atmosphere,
+        piano,
+        drums,
+        bass,
+        synth,
+        genre: selectedGenre,
+      });
+      setIsPlaying(true);
+      toast.success("Playing music 🎵");
+    }
+  }, [isPlaying, stopPlayback, startPlayback, bpm, harmony, texture, atmosphere, piano, drums, bass, synth, selectedGenre]);
+
+  // Handle recording
+  const handleStartRecording = useCallback(() => {
+    startRecording();
+    toast.success("Recording started 🎤");
+  }, [startRecording]);
+
+  const handleStopRecording = useCallback(async () => {
+    await stopRecording();
+    toast.success("Recording stopped");
+  }, [stopRecording]);
+
+  const handleExportRecording = useCallback(async (format: 'wav' | 'mp3') => {
+    const blob = await exportRecording(format);
+    if (blob) {
+      toast.success(`Exported as ${format.toUpperCase()}`);
+    } else {
+      toast.error("No recording to export");
+    }
+  }, [exportRecording]);
+
+  // Instrument interaction handlers
+  const handlePianoInteract = useCallback((value: number) => {
+    playPiano(value);
+  }, [playPiano]);
+
+  const handleDrumsInteract = useCallback((value: number) => {
+    playDrums(value);
+  }, [playDrums]);
+
+  const handleBassInteract = useCallback((value: number) => {
+    playBass(value);
+  }, [playBass]);
+
+  const handleSynthInteract = useCallback((value: number) => {
+    playSynth(value);
+  }, [playSynth]);
+
+  // Apply suggestion from collaborators
+  const handleApplyFeedbackSuggestion = useCallback((param: string, value: number) => {
+    switch (param) {
+      case 'piano': setPiano(value); break;
+      case 'drums': setDrums(value); break;
+      case 'bass': setBass(value); break;
+      case 'synth': setSynth(value); break;
+      case 'harmony': setHarmony(value); break;
+      case 'texture': setTexture(value); break;
+      case 'atmosphere': setAtmosphere(value); break;
+    }
+    toast.success(`Applied: ${param} = ${value}`);
+  }, []);
 
   const handleBpmChange = (newBpm: number) => {
     setBpm(newBpm);
@@ -439,6 +537,31 @@ const Index = () => {
               />
             </div>
 
+            {/* Instrument Panel - Interactive Sounds */}
+            <InstrumentPanel
+              piano={piano}
+              drums={drums}
+              bass={bass}
+              synth={synth}
+              onPianoChange={setPiano}
+              onDrumsChange={setDrums}
+              onBassChange={setBass}
+              onSynthChange={setSynth}
+              onPianoInteract={handlePianoInteract}
+              onDrumsInteract={handleDrumsInteract}
+              onBassInteract={handleBassInteract}
+              onSynthInteract={handleSynthInteract}
+            />
+
+            {/* Recording Controls */}
+            <RecordingControls
+              isRecording={isRecording}
+              isPlaying={isPlaying}
+              onStartRecording={handleStartRecording}
+              onStopRecording={handleStopRecording}
+              onExport={handleExportRecording}
+            />
+
             {/* Session Stats */}
             <div className="glass-panel p-4">
               <div className="grid grid-cols-4 gap-4 text-center">
@@ -473,6 +596,12 @@ const Index = () => {
               isProducer={isProducer}
             />
             
+            {/* Collaborative Feedback */}
+            <CollaborativeFeedback
+              currentParams={{ harmony, rhythm: bpm, texture, atmosphere, piano, drums, bass, synth }}
+              onApplySuggestion={handleApplyFeedbackSuggestion}
+            />
+            
             <CrowdParticipants sessionId={session?.id || "demo"} isProducer={isProducer} />
             
             {/* Mobile Genre Selector */}
@@ -494,7 +623,7 @@ const Index = () => {
         <footer className="border-t border-border/30 bg-background/50 backdrop-blur-sm">
           <PlaybackControls
             isPlaying={isPlaying}
-            onPlayPause={() => setIsPlaying(!isPlaying)}
+            onPlayPause={handlePlayPause}
             bpm={bpm}
             currentTime={currentTime}
           />
